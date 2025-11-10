@@ -99,6 +99,15 @@ export const generatePlanningPDF = (viewModel: ReportViewModel) => {
                  const role = assignment ? serviceRoles.find(r => r.id === assignment.roleId) : null;
                  return [`${student.apellido1} ${student.apellido2}, ${student.nombre}`, role?.name || ''];
             });
+            
+            // Check if there is enough space for the next block, if not, add a new page.
+            const minBlockHeight = 40; // Estimate for header + elaborations + one student row + padding
+            const pageBottomMargin = 20; // Space for footer
+            
+            if (lastY > pageHeight - pageBottomMargin - minBlockHeight) {
+                doc.addPage();
+                lastY = 35; // Corresponds to margin.top in autoTable options
+            }
 
             autoTable(doc, {
                 startY: lastY,
