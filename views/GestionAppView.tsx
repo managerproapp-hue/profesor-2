@@ -1,0 +1,319 @@
+import React, { useState, useMemo, useRef } from 'react';
+import { ServiceRole } from '../types';
+// FIX: Add TrashIcon to imports
+import { SettingsIcon, SaveIcon, XIcon, UploadIcon, ExportIcon, TrashIcon } from '../components/icons';
+import { useAppContext } from '../context/AppContext';
+
+const DataCard: React.FC<{ children: React.ReactNode; }> = ({ children }) => (
+    <div className="bg-white p-6 rounded-lg shadow-sm">{children}</div>
+);
+
+const RoleModal: React.FC<{
+    role: ServiceRole | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (role: ServiceRole) => void;
+}> = ({ role, isOpen, onClose, onSave }) => {
+    const [name, setName] = useState('');
+    const [color, setColor] = useState('#cccccc');
+
+    React.useEffect(() => {
+        if (role) {
+            setName(role.name);
+            setColor(role.color);
+        }
+    }, [role]);
+
+    if (!isOpen || !role) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({ ...role, name, color });
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-modal-title"
+        >
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 id="role-modal-title" className="text-xl font-bold">{role.id.startsWith('new-') ? 'Añadir Nuevo Rol' : 'Editar Rol'}</h3>
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><XIcon className="w-5 h-5" /></button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    <div className="mb-4">
+                        <label htmlFor="roleName" className="block text-sm font-medium text-gray-700">Nombre del Rol</label>
+                        <input type="text" id="roleName" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                    </div>
+                    <div className="mb-6">
+                        <label htmlFor="roleColor" className="block text-sm font-medium text-gray-700">Color</label>
+                        <input type="color" id="roleColor" value={color} onChange={e => setColor(e.target.value)} className="mt-1 block w-full h-10" />
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancelar</button>
+                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const BACKUP_OPTIONS_MAP: Record<string, string> = {
+    'students': 'Alumnos',
+    'practiceGroups': 'Grupos de Práctica',
+    'services': 'Servicios Planificados',
+    'serviceEvaluations': 'Evaluaciones de Servicios',
+    'serviceRoles': 'Roles de Servicio',
+    'entryExitRecords': 'Registro de Salidas/Entradas',
+    'practicalExamEvaluations': 'Evaluaciones de Ex. Prácticos',
+    'academicGrades': 'Calificaciones (Módulo Principal)',
+    'courseGrades': 'Calificaciones (Otros Módulos)',
+    'teacher-app-data': 'Datos del Profesor',
+    'institute-app-data': 'Datos del Instituto',
+};
+const backupOptions = Object.keys(BACKUP_OPTIONS_MAP);
+
+
+const GestionAppView: React.FC = () => {
+    const { 
+        teacherData, setTeacherData, 
+        instituteData, setInstituteData, 
+        serviceRoles, setServiceRoles,
+        handleDeleteRole, addToast
+    } = useAppContext();
+    
+    const [currentTeacherData, setCurrentTeacherData] = useState(teacherData);
+    const [currentInstituteData, setCurrentInstituteData] = useState(instituteData);
+    const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+    const [editingRole, setEditingRole] = useState<ServiceRole | null>(null);
+    const [backupKeys, setBackupKeys] = useState<string[]>(backupOptions);
+    
+    const handleLogoChange = (setter: React.Dispatch<React.SetStateAction<any>>, field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setter((prev: any) => ({ ...prev, [field]: event.target?.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+    
+    const handleOpenRoleModal = (role: ServiceRole | null, type?: 'leader' | 'secondary') => {
+        if (role) {
+            setEditingRole(role);
+        } else if(type) {
+            setEditingRole({
+                id: `new-role-${Date.now()}`,
+                name: 'Nuevo Rol',
+                color: '#808080',
+                type,
+            });
+        }
+        setIsRoleModalOpen(true);
+    };
+
+    const handleSaveRole = (role: ServiceRole) => {
+        const finalRole = { ...role, id: role.id.startsWith('new-') ? `role-${Date.now()}` : role.id };
+        if (role.id.startsWith('new-')) {
+             setServiceRoles(prev => [...prev, finalRole]);
+             addToast('Nuevo rol añadido.', 'success');
+        } else {
+             setServiceRoles(prev => prev.map(r => r.id === finalRole.id ? finalRole : r));
+             addToast('Rol actualizado.', 'success');
+        }
+    };
+    
+    const handleDeleteRoleInternal = (roleId: string, roleName: string) => {
+        if(window.confirm(`¿Estás seguro que quieres eliminar el rol "${roleName}"? Esta acción no se puede deshacer.`)) {
+            handleDeleteRole(roleId);
+        }
+    }
+    
+    const leaderRoles = useMemo(() => serviceRoles.filter(r => r.type === 'leader'), [serviceRoles]);
+    const secondaryRoles = useMemo(() => serviceRoles.filter(r => r.type === 'secondary'), [serviceRoles]);
+
+    const handleBackup = () => {
+        if (backupKeys.length === 0) {
+            addToast('Selecciona al menos un módulo para respaldar.', 'error');
+            return;
+        }
+        const backupData: Record<string, any> = {};
+        backupKeys.forEach(key => {
+            const data = localStorage.getItem(key);
+            if (data) {
+                try {
+                    backupData[key] = JSON.parse(data);
+                } catch(e) {
+                    console.warn(`Could not parse localStorage item: ${key}`);
+                }
+            }
+        });
+
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const date = new Date().toISOString().split('T')[0];
+        a.download = `backup-TeacherDash-${date}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        addToast('Copia de seguridad descargada.', 'success');
+    };
+    
+    const restoreFileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!window.confirm('¡Atención! Restaurar una copia de seguridad sobrescribirá TODOS los datos actuales. ¿Deseas continuar?')) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const backupData = JSON.parse(event.target?.result as string);
+                Object.keys(backupData).forEach(key => {
+                    localStorage.setItem(key, JSON.stringify(backupData[key]));
+                });
+                addToast('Restauración completada. La página se recargará.', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } catch (error) {
+                addToast('Error al leer el archivo de copia de seguridad.', 'error');
+                console.error(error);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const toggleBackupKey = (key: string) => {
+        setBackupKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+    }
+
+    return (
+        <div>
+            <header className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-800 flex items-center">
+                    <SettingsIcon className="w-8 h-8 mr-3 text-blue-500" />
+                    Gestión de la App
+                </h1>
+                <p className="text-gray-500 mt-1">Personaliza la información, gestiona roles y realiza copias de seguridad.</p>
+            </header>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-8">
+                    <DataCard>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Datos del Profesor</h3>
+                        <div className="flex items-center space-x-4 mb-4">
+                             <img src={currentTeacherData.logo || 'https://via.placeholder.com/80'} alt="Logo Profesor" className="w-20 h-20 rounded-full object-cover bg-gray-200" />
+                            <input type="file" accept="image/*" onChange={handleLogoChange(setCurrentTeacherData, 'logo')} className="text-sm" />
+                        </div>
+                        <div className="space-y-4">
+                            <input type="text" placeholder="Nombre y Apellidos" value={currentTeacherData.name} onChange={e => setCurrentTeacherData(p => ({...p, name: e.target.value}))} className="w-full p-2 border rounded" />
+                            <input type="email" placeholder="Email" value={currentTeacherData.email} onChange={e => setCurrentTeacherData(p => ({...p, email: e.target.value}))} className="w-full p-2 border rounded" />
+                            <button onClick={() => { setTeacherData(currentTeacherData); addToast("Datos del profesor guardados.", 'success'); }} className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Datos</button>
+                        </div>
+                    </DataCard>
+
+                    <DataCard>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Datos del Instituto</h3>
+                        <div className="flex items-center space-x-4 mb-4">
+                             <img src={currentInstituteData.logo || 'https://via.placeholder.com/80'} alt="Logo Instituto" className="w-20 h-20 rounded-md object-cover bg-gray-200" />
+                            <input type="file" accept="image/*" onChange={handleLogoChange(setCurrentInstituteData, 'logo')} className="text-sm" />
+                        </div>
+                        <div className="space-y-4">
+                            <input type="text" placeholder="Nombre del Centro" value={currentInstituteData.name} onChange={e => setCurrentInstituteData(p => ({...p, name: e.target.value}))} className="w-full p-2 border rounded" />
+                            <input type="text" placeholder="Dirección" value={currentInstituteData.address} onChange={e => setCurrentInstituteData(p => ({...p, address: e.target.value}))} className="w-full p-2 border rounded" />
+                            <input type="text" placeholder="CIF" value={currentInstituteData.cif} onChange={e => setCurrentInstituteData(p => ({...p, cif: e.target.value}))} className="w-full p-2 border rounded" />
+                            <button onClick={() => { setInstituteData(currentInstituteData); addToast("Datos del instituto guardados.", 'success'); }} className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Datos</button>
+                        </div>
+                    </DataCard>
+                </div>
+
+                <div className="space-y-8">
+                    <DataCard>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Roles de Servicio</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-bold">Líderes</h4>
+                                    <button onClick={() => handleOpenRoleModal(null, 'leader')} className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded hover:bg-blue-200">Añadir</button>
+                                </div>
+                                <div className="space-y-2">
+                                    {leaderRoles.map(role => (
+                                        <div key={role.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
+                                            <div className="flex items-center cursor-pointer flex-1" onClick={() => handleOpenRoleModal(role)}>
+                                                <div className="w-5 h-5 rounded-sm mr-2 flex-shrink-0" style={{ backgroundColor: role.color }}></div>
+                                                <span className="text-sm truncate">{role.name}</span>
+                                            </div>
+                                            <div>
+                                                <button onClick={() => handleDeleteRoleInternal(role.id, role.name)} className="p-1 text-gray-400 hover:text-red-600">
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-bold">Secundarios</h4>
+                                    <button onClick={() => handleOpenRoleModal(null, 'secondary')} className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded hover:bg-blue-200">Añadir</button>
+                                </div>
+                                <div className="space-y-2">
+                                     {secondaryRoles.map(role => (
+                                        <div key={role.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
+                                            <div className="flex items-center cursor-pointer flex-1" onClick={() => handleOpenRoleModal(role)}>
+                                                <div className="w-5 h-5 rounded-sm mr-2 flex-shrink-0" style={{ backgroundColor: role.color }}></div>
+                                                <span className="text-sm truncate">{role.name}</span>
+                                            </div>
+                                            <div>
+                                                 <button onClick={() => handleDeleteRoleInternal(role.id, role.name)} className="p-1 text-gray-400 hover:text-red-600">
+                                                    <TrashIcon className="w-4 h-4" />
+                                                 </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </DataCard>
+
+                    <DataCard>
+                         <h3 className="text-xl font-bold text-gray-800 mb-4">Backup y Restauración</h3>
+                         <div className="space-y-6">
+                            <div>
+                                <h4 className="font-bold mb-2">Crear Copia de Seguridad</h4>
+                                <p className="text-sm text-gray-600 mb-3">Selecciona los módulos de datos para incluir en la copia de seguridad.</p>
+                                <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+                                    {backupOptions.map(key => (
+                                        <label key={key} className="flex items-center">
+                                            <input type="checkbox" checked={backupKeys.includes(key)} onChange={() => toggleBackupKey(key)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                            <span className="ml-2">{BACKUP_OPTIONS_MAP[key]}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <button onClick={handleBackup} className="w-full flex items-center justify-center bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition"><ExportIcon className="w-5 h-5 mr-2" />Crear y Descargar Copia</button>
+                            </div>
+                            <div className="border-t pt-4">
+                                <h4 className="font-bold mb-2">Restaurar Copia de Seguridad</h4>
+                                <p className="text-sm text-red-600 bg-red-50 p-2 rounded-md mb-3"><strong>¡Atención!</strong> Esto reemplazará todos los datos actuales de la aplicación.</p>
+                                <input type="file" accept=".json" onChange={handleRestore} ref={restoreFileInputRef} className="hidden" />
+                                <button onClick={() => restoreFileInputRef.current?.click()} className="w-full flex items-center justify-center bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition"><UploadIcon className="w-5 h-5 mr-2" />Seleccionar Archivo y Restaurar</button>
+                            </div>
+                         </div>
+                    </DataCard>
+                </div>
+            </div>
+            <RoleModal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} role={editingRole} onSave={handleSaveRole} />
+        </div>
+    );
+};
+
+export default GestionAppView;
