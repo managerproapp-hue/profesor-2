@@ -1,7 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ReportViewModel } from '../types';
-import { PRE_SERVICE_BEHAVIOR_ITEMS } from '../data/constants';
+import { ReportViewModel, Student, ServiceRole } from '../types';
 
 // --- Reusable PDF Generation Helpers ---
 
@@ -14,174 +13,222 @@ const addImageToPdf = (doc: jsPDF, imageData: string | null, x: number, y: numbe
     }
 };
 
-const getPageHeaderFooterCallback = (viewModel: ReportViewModel, title: string) => {
-    const { teacherData, instituteData } = viewModel;
-    const pageMargin = 15;
-    
-    return (data: any) => {
+const PAGE_MARGIN = 15;
+
+// --- Planning PDF ---
+
+export const generatePlanningPDF = (viewModel: ReportViewModel) => {
+    const { service, serviceRoles, groupedStudentsInService, participatingStudents, teacherData, instituteData } = viewModel;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    let lastY = 0;
+
+    const didDrawPage = (data: any) => {
         const doc = data.doc;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
 
-        // --- HEADER ---
-        addImageToPdf(doc, instituteData.logo, pageMargin, 10, 15, 15);
-        addImageToPdf(doc, teacherData.logo, pageWidth - pageMargin - 15, 10, 15, 15);
+        // HEADER
+        addImageToPdf(doc, instituteData.logo, PAGE_MARGIN, 10, 15, 15);
+        addImageToPdf(doc, teacherData.logo, pageWidth - PAGE_MARGIN - 15, 10, 15, 15);
         
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(instituteData.name || 'Nombre del Centro', pageMargin + 17, 15);
-        doc.text(teacherData.name || 'Nombre del Profesor', pageWidth - pageMargin - 17, 15, { align: 'right' });
-        
-        doc.setFontSize(16);
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(40);
-        doc.text(title, pageWidth / 2, 25, { align: 'center' });
+        doc.text(`Planning: ${service.name}`, pageWidth / 2, 18, { align: 'center' });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        doc.text(`Comienzo curso (${new Date(service.date).toLocaleDateString('es-ES')})`, pageWidth / 2, 24, { align: 'center' });
         
-        doc.setDrawColor(180);
-        doc.line(pageMargin, 32, pageWidth - pageMargin, 32);
-
-        // --- FOOTER ---
+        // FOOTER
         doc.setFontSize(8);
         doc.setTextColor(120);
-        doc.line(pageMargin, pageHeight - 15, pageWidth - pageMargin, pageHeight - 15);
+        doc.text(`${instituteData.name} - ${teacherData.name}`, PAGE_MARGIN, pageHeight - 10);
         doc.text(`Página ${data.pageNumber}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
         const date = new Date().toLocaleDateString('es-ES');
-        doc.text(date, pageWidth - pageMargin, pageHeight - 10, { align: 'right' });
+        doc.text(date, pageWidth - PAGE_MARGIN, pageHeight - 10, { align: 'right' });
     };
-};
 
-// --- Specific Report Generation Functions ---
-
-export const generatePlanningPDF = (viewModel: ReportViewModel) => {
-    const { service, serviceRoles, groupedStudentsInService } = viewModel;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    let lastY = 40;
-
-    const didDrawPage = getPageHeaderFooterCallback(viewModel, `Planning del Servicio: ${service.name}`);
-
-    // Groups & Elaborations
-    const elaborationsBody = [];
-    const comedorGroups = service.assignedGroups.comedor.map(id => viewModel.practiceGroups.find(g => g.id === id)?.name).filter(Boolean).join(', ');
-    const takeawayGroups = service.assignedGroups.takeaway.map(id => viewModel.practiceGroups.find(g => g.id === id)?.name).filter(Boolean).join(', ');
-
-    const maxElaborations = Math.max(service.elaborations.comedor.length, service.elaborations.takeaway.length);
-    for (let i = 0; i < maxElaborations; i++) {
-        const comedorElab = service.elaborations.comedor[i];
-        const takeawayElab = service.elaborations.takeaway[i];
-        const comedorElabText = comedorElab ? `${comedorElab.name} (G: ${viewModel.practiceGroups.find(g => g.id === comedorElab.responsibleGroupId)?.name || 'N/A'})` : '';
-        const takeawayElabText = takeawayElab ? `${takeawayElab.name} (G: ${viewModel.practiceGroups.find(g => g.id === takeawayElab.responsibleGroupId)?.name || 'N/A'})` : '';
-        elaborationsBody.push([comedorElabText, takeawayElabText]);
-    }
-
-    autoTable(doc, {
-        startY: lastY,
-        head: [['COMEDOR', 'TAKEAWAY']],
-        body: [[{content: `Grupos: ${comedorGroups || 'Ninguno'}`, styles: {fontStyle: 'bold'}}, {content: `Grupos: ${takeawayGroups || 'Ninguno'}`, styles: {fontStyle: 'bold'}}]],
-        theme: 'grid',
-        headStyles: { fillColor: [41, 128, 185] },
-        didDrawPage: didDrawPage
-    });
-    
-    autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY,
-        head: [['Elaboraciones Comedor', 'Elaboraciones Takeaway']],
-        body: elaborationsBody.length > 0 ? elaborationsBody : [['-', '-']],
-        theme: 'striped',
-        didDrawPage: didDrawPage
-    });
-
-    lastY = (doc as any).lastAutoTable.finalY + 10;
-    
-    // Student Roles
-    const studentRolesBody = viewModel.participatingStudents.map(student => {
+    const leaders = participatingStudents.map(student => {
         const assignment = service.studentRoles.find(sr => sr.studentId === student.id);
         const role = assignment ? serviceRoles.find(r => r.id === assignment.roleId) : null;
-        const group = viewModel.practiceGroups.find(pg => pg.studentIds.includes(student.id));
-        return [`${student.apellido1} ${student.apellido2}, ${student.nombre}`, group?.name || 'N/A', role?.name || 'Sin asignar'];
+        return { student, role };
+    }).filter(item => item.role && item.role.type === 'leader').sort((a,b) => a.role!.name.localeCompare(b.role!.name));
+
+    const leadersBody = leaders.map(l => [
+        { content: l.role?.name, styles: { fontStyle: 'bold' } }, 
+        `${l.student.nombre} ${l.student.apellido1} ${l.student.apellido2}`
+    ]);
+
+    autoTable(doc, {
+        startY: 32,
+        head: [['Líderes del Servicio']],
+        body: leadersBody,
+        theme: 'striped',
+        headStyles: { fillColor: [220, 220, 220], textColor: 40, fontStyle: 'bold' },
+        didDrawPage
     });
     
-    autoTable(doc, {
-        startY: lastY,
-        head: [['Alumno', 'Grupo', 'Puesto Asignado']],
-        body: studentRolesBody,
-        theme: 'striped',
-        headStyles: { fillColor: [34, 139, 34] },
-        didDrawPage: didDrawPage
-    });
+    lastY = (doc as any).lastAutoTable.finalY + 8;
+
+    const drawServiceSection = (area: 'comedor' | 'takeaway') => {
+        if ((doc as any).lastAutoTable.finalY > 250) doc.addPage();
+        autoTable(doc, {
+            startY: lastY,
+            body: [[`SERVICIO DE ${area.toUpperCase()}`]],
+            theme: 'plain',
+            styles: { minCellHeight: 8, valign: 'middle', halign: 'center', fillColor: [230, 240, 230], fontStyle: 'bold', textColor: 40 }
+        });
+        lastY = (doc as any).lastAutoTable.finalY;
+
+        const groupsInArea = groupedStudentsInService.filter(g => service.assignedGroups[area].includes(g.group.id));
+
+        groupsInArea.forEach(groupData => {
+            const elaborations = service.elaborations[area].filter(e => e.responsibleGroupId === groupData.group.id);
+            const elaborationsText = 'Elaboraciones:\n' + (elaborations.map(e => `- ${e.name}`).join('\n'));
+
+            const studentRolesBody = groupData.students.map(student => {
+                 const assignment = service.studentRoles.find(sr => sr.studentId === student.id);
+                 const role = assignment ? serviceRoles.find(r => r.id === assignment.roleId) : null;
+                 return [`${student.apellido1} ${student.apellido2}, ${student.nombre}`, role?.name || ''];
+            });
+
+            autoTable(doc, {
+                startY: lastY,
+                body: [
+                    [{ content: `Grupo ${groupData.group.name}`, colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
+                    [{ content: elaborationsText, colSpan: 2, styles: { minCellHeight: 10 } }],
+                    ...studentRolesBody
+                ],
+                theme: 'grid',
+                columnStyles: { 1: { halign: 'right' } },
+                didDrawPage
+            });
+            lastY = (doc as any).lastAutoTable.finalY;
+        });
+        lastY += 8;
+    };
+    
+    drawServiceSection('comedor');
+    drawServiceSection('takeaway');
 
     doc.save(`Planning_${service.name.replace(/ /g, '_')}.pdf`);
 };
 
+// --- Tracking Sheet PDF ---
+
 export const generateTrackingSheetPDF = (viewModel: ReportViewModel) => {
-    const { service, evaluation, groupedStudentsInService } = viewModel;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    let lastY = 40;
-
-    const preServiceDateKey = Object.keys(evaluation.preService).sort((a,b) => new Date(b).getTime() - new Date(a).getTime())[0];
-    if (!preServiceDateKey) {
-        alert("No hay datos de pre-servicio para generar este informe.");
-        return;
-    }
-    const preServiceDay = evaluation.preService[preServiceDateKey];
-    const preServiceDate = new Date(preServiceDateKey + 'T12:00:00Z');
-    const title = `Ficha de Seguimiento - Semana del ${preServiceDate.toLocaleDateString('es-ES')}`;
-
-    const didDrawPage = getPageHeaderFooterCallback(viewModel, title);
+    const { service, groupedStudentsInService, teacherData, instituteData, serviceRoles } = viewModel;
+    const doc = new jsPDF('p', 'mm', 'a4');
     
-    groupedStudentsInService.forEach((groupData, index) => {
-        if(groupData.students.length === 0) return;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const contentWidth = pageWidth - PAGE_MARGIN * 2;
+    const STUDENT_BLOCK_HEIGHT = 73;
 
-        const head = [
-            ['Criterio', ...groupData.students.map(s => `${s.apellido1} ${s.nombre.charAt(0)}.`)]
+    const drawHeader = (groupTitle: string, isContinuation: boolean) => {
+        addImageToPdf(doc, instituteData.logo, PAGE_MARGIN, 10, 15, 15);
+        addImageToPdf(doc, teacherData.logo, pageWidth - PAGE_MARGIN - 15, 10, 15, 15);
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40);
+        doc.text(`Ficha de Seguimiento: ${service.name}`, pageWidth / 2, 16, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        doc.text(new Date(service.date).toLocaleDateString('es-ES'), pageWidth / 2, 21, { align: 'center' });
+        
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(groupTitle + (isContinuation ? ' (cont.)' : ''), PAGE_MARGIN, 32);
+    };
+
+    const drawFooter = (pageNum: number) => {
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(`${instituteData.name} - ${teacherData.name}`, PAGE_MARGIN, pageHeight - 10);
+        doc.text(`Página ${pageNum}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+        const date = new Date().toLocaleDateString('es-ES');
+        doc.text(date, pageWidth - PAGE_MARGIN, pageHeight - 10, { align: 'right' });
+    };
+
+    const drawStudentBlock = (student: Student, role: ServiceRole | null | undefined, y: number) => {
+        doc.setDrawColor(150);
+        doc.line(PAGE_MARGIN, y, pageWidth - PAGE_MARGIN, y); // Top separator
+        y += 5;
+
+        // Student Info
+        doc.setFontSize(12).setFont('helvetica', 'bold').setTextColor(0);
+        doc.text(`${student.apellido1} ${student.apellido2}, ${student.nombre}`.toUpperCase(), PAGE_MARGIN, y);
+        doc.setFontSize(11).setFont('helvetica', 'normal');
+        doc.text(role?.name || '', pageWidth - PAGE_MARGIN, y, { align: 'right' });
+        y += 8;
+
+        const col1X = PAGE_MARGIN;
+        const col2X = pageWidth / 2 + 5;
+        const colWidth = contentWidth / 2 - 5;
+        
+        // Column Titles
+        doc.setFontSize(10).setFont('helvetica', 'bold');
+        doc.text('DÍA PREVIO', col1X, y);
+        doc.text('DÍA DE SERVICIO', col2X, y);
+        y += 5;
+
+        // Checklists
+        doc.setFontSize(9).setFont('helvetica', 'normal');
+        const checklist = [
+            'Asistencia: Sí [ ] No [X]', 'Uniforme completo: [ ]', 'Fichas técnicas: [ ]', 'Material requerido: [ ]'
         ];
-
-        const body = [];
-        const getCheck = (checked: boolean) => checked ? 'X' : '';
-
-        const indEvals = preServiceDay.individualEvaluations;
-
-        body.push(['Asistencia', ...groupData.students.map(s => getCheck(indEvals[s.id]?.attendance ?? true))]);
-        body.push(['Fichas', ...groupData.students.map(s => getCheck(indEvals[s.id]?.hasFichas ?? true))]);
-        body.push(['Uniforme', ...groupData.students.map(s => getCheck(indEvals[s.id]?.hasUniforme ?? true))]);
-        body.push(['Material', ...groupData.students.map(s => getCheck(indEvals[s.id]?.hasMaterial ?? true))]);
-        
-        const symbolMap: Record<number, string> = { 2: '++', 1: '+', 0: '-' };
-        PRE_SERVICE_BEHAVIOR_ITEMS.forEach(item => {
-            body.push([item.label, ...groupData.students.map(s => {
-                const score = indEvals[s.id]?.behaviorScores[item.id];
-                return score !== null && score !== undefined ? symbolMap[score] : '';
-            })]);
+        checklist.forEach((item, index) => {
+            doc.text(item, col1X, y + (index * 5));
+            doc.text(item, col2X, y + (index * 5));
         });
-        body.push(['Observaciones', ...groupData.students.map(s => indEvals[s.id]?.observations || '')]);
-        
-        if (index > 0) {
+        y += checklist.length * 5 + 2;
+
+        // Observation Boxes
+        doc.setDrawColor(180);
+        doc.rect(col1X, y, colWidth, 25);
+        doc.rect(col2X, y, colWidth, 25);
+    };
+
+    let isFirstGroup = true;
+    groupedStudentsInService.forEach(groupData => {
+        if (groupData.students.length === 0) return;
+
+        if (!isFirstGroup) {
             doc.addPage();
-            lastY = 40;
         }
-        
-        autoTable(doc, {
-            startY: lastY,
-            head: [[{ content: `Grupo: ${groupData.group.name}`, colSpan: groupData.students.length + 1, styles: { halign: 'center', fillColor: [220, 220, 220], textColor: 0 } }]],
-            didDrawPage
-        });
-        
-        autoTable(doc, {
-            startY: (doc as any).lastAutoTable.finalY,
-            head: head,
-            body: body,
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185] },
-            didDrawPage,
-            styles: {
-                fontSize: 8,
-                cellPadding: 1.5,
-                overflow: 'linebreak'
-            },
-            columnStyles: {
-                0: { cellWidth: 60 }
+        isFirstGroup = false;
+
+        let currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+        const groupType = service.assignedGroups.comedor.includes(groupData.group.id) ? 'COMEDOR' : 'TAKEAWAY';
+        const groupTitle = `Grupo ${groupData.group.name} - ${groupType}`;
+
+        drawHeader(groupTitle, false);
+        let currentY = 40;
+
+        doc.setFontSize(10).setFont('helvetica', 'normal');
+        doc.text('Observaciones Generales del Grupo:', PAGE_MARGIN, currentY);
+        doc.setDrawColor(180);
+        doc.rect(PAGE_MARGIN, currentY + 2, contentWidth, 15);
+        currentY += 23;
+
+        groupData.students.forEach(student => {
+            if (currentY + STUDENT_BLOCK_HEIGHT > pageHeight - 15) { // Check for page break
+                drawFooter(currentPage);
+                doc.addPage();
+                currentPage++;
+                currentY = 35;
+                drawHeader(groupTitle, true);
             }
+            const role = serviceRoles.find(r => r.id === service.studentRoles.find(sr => sr.studentId === student.id)?.roleId);
+            drawStudentBlock(student, role, currentY);
+            currentY += STUDENT_BLOCK_HEIGHT;
         });
-        lastY = (doc as any).lastAutoTable.finalY + 15;
+
+        drawFooter(currentPage);
     });
 
     doc.save(`Ficha_Seguimiento_${service.name.replace(/ /g, '_')}.pdf`);
