@@ -1,122 +1,144 @@
-import React, { createContext, useState, useEffect, useCallback, useMemo, useContext } from 'react';
-import { AppContextType, AppProviderProps, Student, PracticeGroup, Service, ServiceEvaluation, ServiceRole, EntryExitRecord, PracticalExamEvaluation, TeacherData, InstituteData, AcademicGrades, CourseGrades, Toast, ToastType, StudentCalculatedGrades, PreServiceDayEvaluation } from '../types';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { 
+    Student, PracticeGroup, Service, ServiceEvaluation, ServiceRole, EntryExitRecord, 
+    AcademicGrades, CourseGrades, PracticalExamEvaluation, TeacherData, InstituteData, Toast, ToastType, StudentCalculatedGrades, TrimesterDates
+} from '../types';
 import { parseFile } from '../services/csvParser';
 import { SERVICE_GRADE_WEIGHTS } from '../data/constants';
 
-// --- Create Context ---
+// --- Custom Hook for Local Storage ---
+function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(error);
+      return initialValue;
+    }
+  });
+
+  const setValue: React.Dispatch<React.SetStateAction<T>> = (value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return [storedValue, setValue];
+}
+
+const defaultTrimesterDates: TrimesterDates = {
+  t1: { start: '2024-09-01', end: '2024-12-22' },
+  t2: { start: '2025-01-08', end: '2025-04-11' },
+  t3: { start: '2025-04-22', end: '2025-06-24' },
+};
+
+
+// --- App Context Definition ---
+interface AppContextType {
+    students: Student[];
+    setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
+    practiceGroups: PracticeGroup[];
+    setPracticeGroups: React.Dispatch<React.SetStateAction<PracticeGroup[]>>;
+    services: Service[];
+    setServices: React.Dispatch<React.SetStateAction<Service[]>>;
+    serviceEvaluations: ServiceEvaluation[];
+    setServiceEvaluations: React.Dispatch<React.SetStateAction<ServiceEvaluation[]>>;
+    serviceRoles: ServiceRole[];
+    setServiceRoles: React.Dispatch<React.SetStateAction<ServiceRole[]>>;
+    entryExitRecords: EntryExitRecord[];
+    setEntryExitRecords: React.Dispatch<React.SetStateAction<EntryExitRecord[]>>;
+    academicGrades: AcademicGrades;
+    setAcademicGrades: React.Dispatch<React.SetStateAction<AcademicGrades>>;
+    courseGrades: CourseGrades;
+    setCourseGrades: React.Dispatch<React.SetStateAction<CourseGrades>>;
+    practicalExamEvaluations: PracticalExamEvaluation[];
+    setPracticalExamEvaluations: React.Dispatch<React.SetStateAction<PracticalExamEvaluation[]>>;
+    teacherData: TeacherData;
+    setTeacherData: React.Dispatch<React.SetStateAction<TeacherData>>;
+    instituteData: InstituteData;
+    setInstituteData: React.Dispatch<React.SetStateAction<InstituteData>>;
+    trimesterDates: TrimesterDates;
+    setTrimesterDates: React.Dispatch<React.SetStateAction<TrimesterDates>>;
+    
+    toasts: Toast[];
+    addToast: (message: string, type?: ToastType) => void;
+    
+    handleFileUpload: (file: File) => Promise<void>;
+    handleUpdateStudent: (student: Student) => void;
+
+    handleCreateService: () => string;
+    handleSaveServiceAndEvaluation: (service: Service, evaluation: ServiceEvaluation) => void;
+    handleDeleteService: (serviceId: string) => void;
+    onDeleteRole: (roleId: string) => void;
+    handleSaveEntryExitRecord: (record: Omit<EntryExitRecord, 'id' | 'studentId'>, studentIds: string[]) => void;
+    handleSavePracticalExam: (evaluation: PracticalExamEvaluation) => void;
+    
+    calculatedStudentGrades: Record<string, StudentCalculatedGrades>;
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// --- Custom Persistent State Hook ---
-const usePersistentState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
-    const [state, setState] = useState<T>(() => {
-        try {
-            const storedValue = localStorage.getItem(key);
-            return storedValue ? JSON.parse(storedValue) : defaultValue;
-        } catch (error) {
-            console.warn(`Warning: Could not read localStorage key "${key}". Defaulting value.`, error);
-            return defaultValue;
-        }
-    });
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(key, JSON.stringify(state));
-        } catch (error) {
-            console.warn(`Warning: Could not set localStorage key "${key}". State may not be saved.`, error);
-        }
-    }, [key, state]);
-
-    return [state, setState];
-};
-
-// --- Helper Functions ---
-const getTuesday = (serviceDateStr: string): string => {
-    const serviceDate = new Date(serviceDateStr);
-    serviceDate.setHours(12, 0, 0, 0);
-    const dayOfWeek = serviceDate.getDay();
-    const dateOffset = dayOfWeek >= 2 ? dayOfWeek - 2 : (dayOfWeek + 7 - 2);
-    serviceDate.setDate(serviceDate.getDate() - dateOffset);
-    return serviceDate.toISOString().split('T')[0];
-};
-
-// --- App Provider Component ---
-export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-    // --- STATE MANAGEMENT ---
-    const [students, setStudents] = usePersistentState<Student[]>('students', []);
-    const [practiceGroups, setPracticeGroups] = usePersistentState<PracticeGroup[]>('practiceGroups', []);
-    const [services, setServices] = usePersistentState<Service[]>('services', []);
-    const [serviceEvaluations, setServiceEvaluations] = usePersistentState<ServiceEvaluation[]>('serviceEvaluations', []);
-    const [serviceRoles, setServiceRoles] = usePersistentState<ServiceRole[]>('serviceRoles', [
-        { id: 'leader-1', name: 'Jefe de Cocina', color: '#EF4444', type: 'leader' },
-        { id: 'leader-2', name: '2º Jefe de Cocina', color: '#22C55E', type: 'leader' },
-        { id: 'leader-3', name: '2º Jefe de Takeaway', color: '#22C55E', type: 'leader' },
-        { id: 'secondary-1', name: 'Jefe de Partida', color: '#EAB308', type: 'secondary' },
-        { id: 'secondary-2', name: 'Cocinero', color: '#60A5FA', type: 'secondary' },
-        { id: 'secondary-3', name: 'Ayudante', color: '#4ADE80', type: 'secondary' },
-        { id: 'secondary-4', name: 'Sin servicio 1', color: '#A78BFA', type: 'secondary' },
-        { id: 'secondary-5', name: 'Sin servicio 2', color: '#A78BFA', type: 'secondary' },
-    ]);
-    const [entryExitRecords, setEntryExitRecords] = usePersistentState<EntryExitRecord[]>('entryExitRecords', []);
-    const [practicalExamEvaluations, setPracticalExamEvaluations] = usePersistentState<PracticalExamEvaluation[]>('practicalExamEvaluations', []);
-    const [teacherData, setTeacherData] = usePersistentState<TeacherData>('teacher-app-data', { name: '', email: '', logo: null });
-    const [instituteData, setInstituteData] = usePersistentState<InstituteData>('institute-app-data', { name: '', address: '', cif: '', logo: null });
-    const [academicGrades, setAcademicGrades] = usePersistentState<AcademicGrades>('academicGrades', {});
-    const [courseGrades, setCourseGrades] = usePersistentState<CourseGrades>('courseGrades', {});
-
-    // --- TOAST NOTIFICATION STATE ---
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [students, setStudents] = useLocalStorage<Student[]>('students', []);
+    const [practiceGroups, setPracticeGroups] = useLocalStorage<PracticeGroup[]>('practiceGroups', []);
+    const [services, setServices] = useLocalStorage<Service[]>('services', []);
+    const [serviceEvaluations, setServiceEvaluations] = useLocalStorage<ServiceEvaluation[]>('serviceEvaluations', []);
+    const [serviceRoles, setServiceRoles] = useLocalStorage<ServiceRole[]>('serviceRoles', []);
+    const [entryExitRecords, setEntryExitRecords] = useLocalStorage<EntryExitRecord[]>('entryExitRecords', []);
+    const [academicGrades, setAcademicGrades] = useLocalStorage<AcademicGrades>('academicGrades', {});
+    const [courseGrades, setCourseGrades] = useLocalStorage<CourseGrades>('courseGrades', {});
+    const [practicalExamEvaluations, setPracticalExamEvaluations] = useLocalStorage<PracticalExamEvaluation[]>('practicalExamEvaluations', []);
+    const [teacherData, setTeacherData] = useLocalStorage<TeacherData>('teacher-app-data', { name: '', email: '', logo: null });
+    const [instituteData, setInstituteData] = useLocalStorage<InstituteData>('institute-app-data', { name: '', address: '', cif: '', logo: null });
+    const [trimesterDates, setTrimesterDates] = useLocalStorage<TrimesterDates>('trimester-dates', defaultTrimesterDates);
     const [toasts, setToasts] = useState<Toast[]>([]);
-    const addToast = (message: string, type: ToastType = 'info') => {
-        const id = Date.now();
-        setToasts(prev => [...prev, { id, message, type }]);
-        setTimeout(() => {
-            setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
-        }, 3000);
-    };
+    
+    const getTrimester = (date: Date): 't1' | 't2' | 't3' | null => {
+        const checkDate = new Date(date);
+        checkDate.setHours(0,0,0,0);
 
-    // --- DATA MIGRATIONS ---
-    useEffect(() => {
-        // Migration to add 'name' to preService days
-        const needsNameMigration = serviceEvaluations.some(ev => 
-            Object.values(ev.preService || {}).some(psd => psd && typeof (psd as PreServiceDayEvaluation).name === 'undefined')
-        );
+        // Ensure dates from storage are parsed correctly
+        const t1Start = new Date(trimesterDates.t1.start);
+        const t1End = new Date(trimesterDates.t1.end);
+        const t2Start = new Date(trimesterDates.t2.start);
+        const t2End = new Date(trimesterDates.t2.end);
+        const t3Start = new Date(trimesterDates.t3.start);
+        const t3End = new Date(trimesterDates.t3.end);
 
-        if (needsNameMigration) {
-            console.log("Running migration: Add names to pre-service days...");
-            setServiceEvaluations(prev => prev.map(ev => {
-                const newPreService: { [date: string]: PreServiceDayEvaluation } = {};
-                Object.entries(ev.preService || {}).forEach(([date, psd]) => {
-                    if (psd && typeof psd === 'object') {
-                        newPreService[date] = {
-                            ...(psd as PreServiceDayEvaluation),
-                            name: (psd as PreServiceDayEvaluation).name || `Pre-servicio ${new Date(date + 'T12:00:00Z').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`
-                        };
-                    }
-                });
-                return { ...ev, preService: newPreService };
-            }));
-        }
+        if (checkDate >= t1Start && checkDate <= t1End) return 't1';
+        if (checkDate >= t2Start && checkDate <= t2End) return 't2';
+        if (checkDate >= t3Start && checkDate <= t3End) return 't3';
+        
+        return null;
+    }
 
-        // Migration to add 'isLocked' to services
-        const needsLockMigration = services.some(s => typeof s.isLocked === 'undefined');
-        if (needsLockMigration) {
-             console.log("Running migration: Add isLocked flag to services...");
-             setServices(prev => prev.map(s => ({ ...s, isLocked: s.isLocked ?? false })));
-        }
-
-    }, []); // Run only once on initial load
-
-    // --- CALCULATED DATA ---
     const calculatedStudentGrades = useMemo((): Record<string, StudentCalculatedGrades> => {
         const studentGrades: Record<string, StudentCalculatedGrades> = {};
+
         students.forEach(student => {
             const t1Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't1');
             const t2Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't2');
             const recExam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 'rec');
-            const serviceGrades: number[] = [];
+
+            const serviceGradesByTrimester: { t1: number[], t2: number[], t3: number[] } = { t1: [], t2: [], t3: [] };
+            
             serviceEvaluations.forEach(evaluation => {
+                const service = services.find(s => s.id === evaluation.serviceId);
+                if (!service) return;
+
+                const serviceDate = new Date(service.date);
+                const trimester = getTrimester(serviceDate);
+                if (!trimester) return;
+                
                 const individualEval = evaluation.serviceDay.individualScores[student.id];
                 if (individualEval && individualEval.attendance) {
                     const individualScore = (individualEval.scores || []).reduce((sum, score) => sum + (score || 0), 0);
+                    
                     const studentPracticeGroup = practiceGroups.find(pg => pg.studentIds.includes(student.id));
                     let groupScore = 0;
                     if (studentPracticeGroup) {
@@ -125,13 +147,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
                             groupScore = (groupEval.scores || []).reduce((sum, score) => sum + (score || 0), 0);
                         }
                     }
+                    
                     const weightedServiceGrade = (individualScore * SERVICE_GRADE_WEIGHTS.individual) + (groupScore * SERVICE_GRADE_WEIGHTS.group);
-                    serviceGrades.push(weightedServiceGrade);
+                    serviceGradesByTrimester[trimester].push(weightedServiceGrade);
                 }
             });
-            const serviceAverage = serviceGrades.length > 0 ? serviceGrades.reduce((sum, grade) => sum + grade, 0) / serviceGrades.length : null;
+            
+            const calculateAverage = (grades: number[]) => grades.length > 0
+                ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length
+                : null;
+            
             studentGrades[student.id] = {
-                serviceAverage,
+                serviceAverages: {
+                    t1: calculateAverage(serviceGradesByTrimester.t1),
+                    t2: calculateAverage(serviceGradesByTrimester.t2),
+                    t3: calculateAverage(serviceGradesByTrimester.t3),
+                },
                 practicalExams: {
                     t1: t1Exam?.finalScore ?? null,
                     t2: t2Exam?.finalScore ?? null,
@@ -139,26 +170,81 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
                 }
             };
         });
-        return studentGrades;
-    }, [students, serviceEvaluations, practicalExamEvaluations, practiceGroups]);
 
-    // --- BUSINESS LOGIC FUNCTIONS ---
-    const handleFileUpload = async (file: File) => {
-        const result = await parseFile(file);
-        if (result.error) {
-            addToast(result.error, 'error');
-            return { success: false, error: result.error };
-        } else {
-            setStudents(result.data);
-            addToast('Alumnos importados con éxito.', 'success');
-            return { success: true };
-        }
+        return studentGrades;
+    }, [students, services, serviceEvaluations, practicalExamEvaluations, practiceGroups, trimesterDates]);
+
+    const addToast = (message: string, type: ToastType = 'info') => {
+        const id = new Date().getTime().toString();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
+        }, 3000);
     };
 
-    const handleSaveEntryExitRecord = (record: Omit<EntryExitRecord, 'studentId' | 'id'>, studentIds: string[]) => {
-        const newRecords: EntryExitRecord[] = studentIds.map(studentId => ({ ...record, id: `${studentId}-${Date.now()}`, studentId }));
+    const handleFileUpload = async (file: File) => {
+        const { data, error } = await parseFile(file);
+        if (error) {
+            addToast(error, 'error');
+        } else {
+            setStudents(data);
+            addToast(`Se han importado ${data.length} alumnos correctamente.`, 'success');
+        }
+    };
+    
+    const handleUpdateStudent = (updatedStudent: Student) => {
+        setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+        addToast('Datos del alumno actualizados.', 'success');
+    };
+
+    const handleCreateService = (): string => {
+        const newServiceId = `service-${Date.now()}`;
+        const newService: Service = {
+            id: newServiceId,
+            name: `Nuevo Servicio ${new Date().toLocaleDateString('es-ES')}`,
+            date: new Date().toISOString().split('T')[0],
+            isLocked: false,
+            assignedGroups: { comedor: [], takeaway: [] },
+            elaborations: { comedor: [], takeaway: [] },
+            studentRoles: [],
+        };
+        const newEvaluation: ServiceEvaluation = {
+            id: `eval-${newServiceId}`,
+            serviceId: newServiceId,
+            preService: {},
+            serviceDay: { groupScores: {}, individualScores: {} },
+        };
+        setServices(prev => [...prev, newService]);
+        setServiceEvaluations(prev => [...prev, newEvaluation]);
+        addToast('Nuevo servicio creado.', 'success');
+        return newServiceId;
+    };
+
+    const handleSaveServiceAndEvaluation = (service: Service, evaluation: ServiceEvaluation) => {
+        setServices(prev => prev.map(s => s.id === service.id ? service : s));
+        setServiceEvaluations(prev => prev.map(e => e.serviceId === service.id ? evaluation : e));
+        addToast(`Servicio "${service.name}" guardado.`, 'success');
+    };
+
+    const handleDeleteService = (serviceId: string) => {
+        setServices(prev => prev.filter(s => s.id !== serviceId));
+        setServiceEvaluations(prev => prev.filter(e => e.serviceId !== serviceId));
+        addToast('Servicio eliminado.', 'info');
+    };
+    
+    const onDeleteRole = (roleId: string) => {
+        setServiceRoles(prev => prev.filter(r => r.id !== roleId));
+        addToast('Rol de servicio eliminado.', 'info');
+    };
+
+    const handleSaveEntryExitRecord = (record: Omit<EntryExitRecord, 'id' | 'studentId'>, studentIds: string[]) => {
+        const newRecords = studentIds.map(studentId => ({
+            ...record,
+            id: `${studentId}-${Date.now()}-${Math.random()}`,
+            studentId: studentId
+        }));
         setEntryExitRecords(prev => [...prev, ...newRecords]);
-        addToast('Registro de Salida/Entrada guardado.', 'success');
+        addToast(`Registro guardado para ${studentIds.length} alumno(s).`, 'success');
     };
     
     const handleSavePracticalExam = (evaluation: PracticalExamEvaluation) => {
@@ -173,72 +259,25 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         });
         addToast('Examen práctico guardado.', 'success');
     };
-    
-    const handleCreateService = useCallback(() => {
-        const newServiceId = `service-${Date.now()}`;
-        const serviceDate = new Date().toISOString().split('T')[0];
-        const preServiceDate = getTuesday(serviceDate);
-        const newService: Service = { id: newServiceId, name: `Nuevo Servicio ${new Date().toLocaleDateString('es-ES')}`, date: serviceDate, isLocked: false, assignedGroups: { comedor: [], takeaway: [] }, elaborations: { comedor: [], takeaway: [] }, studentRoles: [] };
-        const newEvaluation: ServiceEvaluation = { id: `eval-${newServiceId}`, serviceId: newServiceId, preService: { [preServiceDate]: { name: `Pre-servicio ${new Date(preServiceDate + 'T12:00:00Z').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`, groupObservations: {}, individualEvaluations: {} } }, serviceDay: { groupScores: {}, individualScores: {} } };
-        setServices(prev => [...prev, newService]);
-        setServiceEvaluations(prev => [...prev, newEvaluation]);
-        return newServiceId;
-    }, [setServices, setServiceEvaluations]);
 
-    const handleSaveServiceAndEvaluation = useCallback((service: Service, evaluation: ServiceEvaluation) => {
-        setServices(prev => prev.map(s => s.id === service.id ? service : s));
-        setServiceEvaluations(prev => prev.map(e => e.id === evaluation.id ? evaluation : e));
-        addToast('Servicio guardado con éxito.', 'success');
-    }, [setServices, setServiceEvaluations]);
-
-    const handleDeleteService = (serviceId: string) => {
-        setServices(prev => prev.filter(s => s.id !== serviceId));
-        setServiceEvaluations(prev => prev.filter(e => e.serviceId !== serviceId));
-        addToast('Servicio eliminado.', 'info');
-    };
-    
-    const handleDeleteRole = (roleId: string) => {
-        setServiceRoles(prev => prev.filter(r => r.id !== roleId));
-        setServices(prevServices => prevServices.map(service => ({ ...service, studentRoles: service.studentRoles.filter(sr => sr.roleId !== roleId) })));
-        addToast('Rol eliminado.', 'info');
+    const contextValue: AppContextType = {
+        students, setStudents, practiceGroups, setPracticeGroups, services, setServices, serviceEvaluations, setServiceEvaluations, serviceRoles, setServiceRoles, entryExitRecords, setEntryExitRecords, academicGrades, setAcademicGrades, courseGrades, setCourseGrades, practicalExamEvaluations, setPracticalExamEvaluations, teacherData, setTeacherData, instituteData, setInstituteData,
+        trimesterDates, setTrimesterDates,
+        toasts, addToast,
+        handleFileUpload, handleUpdateStudent,
+        handleCreateService, handleSaveServiceAndEvaluation, handleDeleteService, onDeleteRole,
+        handleSaveEntryExitRecord, handleSavePracticalExam,
+        calculatedStudentGrades
     };
 
-    const handleUpdateStudent = (updatedStudent: Student) => {
-        setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
-        addToast('Ficha del alumno actualizada.', 'success');
-    };
-
-    // --- CONTEXT VALUE ---
-    const value: AppContextType = {
-        students, setStudents,
-        practiceGroups, setPracticeGroups,
-        services, setServices,
-        serviceEvaluations, setServiceEvaluations,
-        serviceRoles, setServiceRoles,
-        entryExitRecords, setEntryExitRecords,
-        practicalExamEvaluations, setPracticalExamEvaluations,
-        teacherData, setTeacherData,
-        instituteData, setInstituteData,
-        academicGrades, setAcademicGrades,
-        courseGrades, setCourseGrades,
-        toasts,
-        calculatedStudentGrades,
-        handleFileUpload,
-        handleSaveEntryExitRecord,
-        handleSavePracticalExam,
-        handleCreateService,
-        handleSaveServiceAndEvaluation,
-        handleDeleteService,
-        handleDeleteRole,
-        handleUpdateStudent,
-        addToast
-    };
-
-    return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    return (
+        <AppContext.Provider value={contextValue}>
+            {children}
+        </AppContext.Provider>
+    );
 };
 
-// --- Custom Hook to use AppContext ---
-export const useAppContext = (): AppContextType => {
+export const useAppContext = () => {
     const context = useContext(AppContext);
     if (context === undefined) {
         throw new Error('useAppContext must be used within an AppProvider');

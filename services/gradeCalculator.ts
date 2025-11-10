@@ -24,7 +24,8 @@ export const calculateStudentPeriodAverages = (
                 grade = (manualGrade === null || manualGrade === undefined) ? null : parseFloat(String(manualGrade));
             } else { // calculated
                 if (instrument.key === 'servicios') {
-                    grade = calculatedGrades.serviceAverage ?? null;
+                    const periodKey = period.key as 't1' | 't2' | 't3';
+                    grade = calculatedGrades.serviceAverages[periodKey] ?? null;
                 } else {
                     const examKeyMap: Record<string, keyof StudentCalculatedGrades['practicalExams']> = {
                         'exPracticoT1': 't1', 'exPracticoT2': 't2', 'exPracticoRec': 'rec',

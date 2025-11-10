@@ -129,11 +129,11 @@ const GestionAcademicaView: React.FC = () => {
                                             const studentAverage = finalGradesAndAverages.studentGrades[student.id].averages[period.key];
                                             return [
                                                 ...period.instruments.map(instrument => {
-                                                    // FIX: Correctly retrieve calculated grades to avoid type errors.
                                                     let calculatedGrade: number | null = null;
                                                     if (instrument.type === 'calculated') {
                                                         if (instrument.key === 'servicios') {
-                                                            calculatedGrade = calculatedStudentGrades[student.id]?.serviceAverage ?? null;
+                                                            const periodKey = period.key as 't1' | 't2' | 't3';
+                                                            calculatedGrade = calculatedStudentGrades[student.id]?.serviceAverages[periodKey] ?? null;
                                                         } else {
                                                             const examKeyMap: Record<string, keyof StudentCalculatedGrades['practicalExams']> = {
                                                                 'exPracticoT1': 't1',

@@ -1,9 +1,10 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 // FIX: Import CourseModuleGrades to use as a type annotation.
 // FIX: Add GradeValue to imports for explicit typing.
-import { Student, Service, ServiceEvaluation, PracticalExamEvaluation, AcademicGrades, CourseGrades, TeacherData, InstituteData, CourseModuleGrades, GradeValue } from '../types';
+import { Student, Service, ServiceEvaluation, PracticalExamEvaluation, AcademicGrades, CourseGrades, TeacherData, InstituteData, CourseModuleGrades, GradeValue, ServiceDayIndividualScores } from '../types';
 import { ACADEMIC_EVALUATION_STRUCTURE, COURSE_MODULES } from '../data/constants';
 import { ClipboardCheckIcon, SaveIcon, ExportIcon } from '../components/icons';
 import { downloadPdfWithTables } from '../components/printUtils';
@@ -53,7 +54,7 @@ const GestionAcademica: React.FC<GestionAcademicaProps> = ({
                 const totalServiceScore = studentServices.reduce((acc: number, curr: ServiceEvaluation) => {
                     const individualScores = curr.serviceDay.individualScores[student.id].scores;
                     // FIX: Explicitly type the arguments of the reduce function to prevent type errors.
-                    const totalIndividual = Object.values(individualScores).reduce((sum: number, s: number | null) => sum + (s || 0), 0);
+                    const totalIndividual = (individualScores || []).reduce((sum: number, s: number | null) => sum + (s || 0), 0);
                     return acc + totalIndividual; // Assuming individual score is out of 10
                 }, 0);
                 const avgServiceScore = totalServiceScore / studentServices.length;

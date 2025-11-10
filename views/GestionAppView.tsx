@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { ServiceRole } from '../types';
-// FIX: Add TrashIcon to imports
-import { SettingsIcon, SaveIcon, XIcon, UploadIcon, ExportIcon, TrashIcon } from '../components/icons';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ServiceRole, TrimesterDates } from '../types';
+import { SettingsIcon, SaveIcon, PlusIcon, TrashIcon, UploadIcon, ExportIcon, XIcon, CalendarDaysIcon } from '../components/icons';
 import { useAppContext } from '../context/AppContext';
 
-const DataCard: React.FC<{ children: React.ReactNode; }> = ({ children }) => (
+const DataCard: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
     <div className="bg-white p-6 rounded-lg shadow-sm">{children}</div>
 );
 
@@ -33,14 +32,10 @@ const RoleModal: React.FC<{
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="role-modal-title"
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 id="role-modal-title" className="text-xl font-bold">{role.id.startsWith('new-') ? 'Añadir Nuevo Rol' : 'Editar Rol'}</h3>
+                    <h3 className="text-xl font-bold">{role.id.startsWith('new-') ? 'Añadir Nuevo Rol' : 'Editar Rol'}</h3>
                     <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><XIcon className="w-5 h-5" /></button>
                 </div>
                 <form onSubmit={handleSubmit}>
@@ -62,36 +57,29 @@ const RoleModal: React.FC<{
     );
 };
 
-const BACKUP_OPTIONS_MAP: Record<string, string> = {
-    'students': 'Alumnos',
-    'practiceGroups': 'Grupos de Práctica',
-    'services': 'Servicios Planificados',
-    'serviceEvaluations': 'Evaluaciones de Servicios',
-    'serviceRoles': 'Roles de Servicio',
-    'entryExitRecords': 'Registro de Salidas/Entradas',
-    'practicalExamEvaluations': 'Evaluaciones de Ex. Prácticos',
-    'academicGrades': 'Calificaciones (Módulo Principal)',
-    'courseGrades': 'Calificaciones (Otros Módulos)',
-    'teacher-app-data': 'Datos del Profesor',
-    'institute-app-data': 'Datos del Instituto',
-};
-const backupOptions = Object.keys(BACKUP_OPTIONS_MAP);
-
 
 const GestionAppView: React.FC = () => {
     const { 
-        teacherData, setTeacherData, 
-        instituteData, setInstituteData, 
-        serviceRoles, setServiceRoles,
-        handleDeleteRole, addToast
+        teacherData, setTeacherData, instituteData, setInstituteData, 
+        serviceRoles, setServiceRoles, onDeleteRole, addToast,
+        trimesterDates, setTrimesterDates
     } = useAppContext();
     
     const [currentTeacherData, setCurrentTeacherData] = useState(teacherData);
     const [currentInstituteData, setCurrentInstituteData] = useState(instituteData);
+    const [currentTrimesterDates, setCurrentTrimesterDates] = useState(trimesterDates);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<ServiceRole | null>(null);
-    const [backupKeys, setBackupKeys] = useState<string[]>(backupOptions);
+    const [backupKeys, setBackupKeys] = useState<string[]>([]);
     
+    useEffect(() => {
+        setCurrentTrimesterDates(trimesterDates);
+    }, [trimesterDates]);
+
+    const backupOptions = [
+        'students', 'practiceGroups', 'services', 'serviceEvaluations', 'serviceRoles', 'entryExitRecords', 'academicGrades', 'courseGrades', 'practicalExamEvaluations', 'teacher-app-data', 'institute-app-data', 'trimester-dates'
+    ];
+
     const handleLogoChange = (setter: React.Dispatch<React.SetStateAction<any>>, field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -118,39 +106,40 @@ const GestionAppView: React.FC = () => {
     };
 
     const handleSaveRole = (role: ServiceRole) => {
-        const finalRole = { ...role, id: role.id.startsWith('new-') ? `role-${Date.now()}` : role.id };
         if (role.id.startsWith('new-')) {
-             setServiceRoles(prev => [...prev, finalRole]);
-             addToast('Nuevo rol añadido.', 'success');
+             setServiceRoles(prev => [...prev, role]);
         } else {
-             setServiceRoles(prev => prev.map(r => r.id === finalRole.id ? finalRole : r));
-             addToast('Rol actualizado.', 'success');
+             setServiceRoles(prev => prev.map(r => r.id === role.id ? role : r));
         }
+        addToast('Rol guardado.', 'success');
     };
     
     const handleDeleteRoleInternal = (roleId: string, roleName: string) => {
         if(window.confirm(`¿Estás seguro que quieres eliminar el rol "${roleName}"? Esta acción no se puede deshacer.`)) {
-            handleDeleteRole(roleId);
+            onDeleteRole(roleId);
         }
     }
     
+    const handleTrimesterDateChange = (trimester: 't1' | 't2' | 't3', field: 'start' | 'end', value: string) => {
+        setCurrentTrimesterDates(prev => ({
+            ...prev,
+            [trimester]: { ...prev[trimester], [field]: value }
+        }));
+    };
+
     const leaderRoles = useMemo(() => serviceRoles.filter(r => r.type === 'leader'), [serviceRoles]);
     const secondaryRoles = useMemo(() => serviceRoles.filter(r => r.type === 'secondary'), [serviceRoles]);
 
     const handleBackup = () => {
         if (backupKeys.length === 0) {
-            addToast('Selecciona al menos un módulo para respaldar.', 'error');
+            addToast('Por favor, selecciona al menos un módulo de datos para respaldar.', 'error');
             return;
         }
         const backupData: Record<string, any> = {};
         backupKeys.forEach(key => {
             const data = localStorage.getItem(key);
             if (data) {
-                try {
-                    backupData[key] = JSON.parse(data);
-                } catch(e) {
-                    console.warn(`Could not parse localStorage item: ${key}`);
-                }
+                backupData[key] = JSON.parse(data);
             }
         });
 
@@ -159,7 +148,7 @@ const GestionAppView: React.FC = () => {
         const a = document.createElement('a');
         a.href = url;
         const date = new Date().toISOString().split('T')[0];
-        a.download = `backup-TeacherDash-${date}.json`;
+        a.download = `backup-culinary-app-${date}.json`;
         a.click();
         URL.revokeObjectURL(url);
         addToast('Copia de seguridad descargada.', 'success');
@@ -182,8 +171,8 @@ const GestionAppView: React.FC = () => {
                 Object.keys(backupData).forEach(key => {
                     localStorage.setItem(key, JSON.stringify(backupData[key]));
                 });
-                addToast('Restauración completada. La página se recargará.', 'success');
-                setTimeout(() => window.location.reload(), 1500);
+                addToast('Restauración completada. La aplicación se recargará.', 'success');
+                setTimeout(() => window.location.reload(), 2000);
             } catch (error) {
                 addToast('Error al leer el archivo de copia de seguridad.', 'error');
                 console.error(error);
@@ -208,7 +197,7 @@ const GestionAppView: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="space-y-8">
-                    <DataCard>
+                    <DataCard title="Datos del Profesor">
                         <h3 className="text-xl font-bold text-gray-800 mb-4">Datos del Profesor</h3>
                         <div className="flex items-center space-x-4 mb-4">
                              <img src={currentTeacherData.logo || 'https://via.placeholder.com/80'} alt="Logo Profesor" className="w-20 h-20 rounded-full object-cover bg-gray-200" />
@@ -217,11 +206,11 @@ const GestionAppView: React.FC = () => {
                         <div className="space-y-4">
                             <input type="text" placeholder="Nombre y Apellidos" value={currentTeacherData.name} onChange={e => setCurrentTeacherData(p => ({...p, name: e.target.value}))} className="w-full p-2 border rounded" />
                             <input type="email" placeholder="Email" value={currentTeacherData.email} onChange={e => setCurrentTeacherData(p => ({...p, email: e.target.value}))} className="w-full p-2 border rounded" />
-                            <button onClick={() => { setTeacherData(currentTeacherData); addToast("Datos del profesor guardados.", 'success'); }} className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Datos</button>
+                            <button onClick={() => { setTeacherData(currentTeacherData); addToast('Datos del profesor guardados.', 'success'); }} className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Datos</button>
                         </div>
                     </DataCard>
 
-                    <DataCard>
+                    <DataCard title="Datos del Instituto">
                         <h3 className="text-xl font-bold text-gray-800 mb-4">Datos del Instituto</h3>
                         <div className="flex items-center space-x-4 mb-4">
                              <img src={currentInstituteData.logo || 'https://via.placeholder.com/80'} alt="Logo Instituto" className="w-20 h-20 rounded-md object-cover bg-gray-200" />
@@ -231,31 +220,53 @@ const GestionAppView: React.FC = () => {
                             <input type="text" placeholder="Nombre del Centro" value={currentInstituteData.name} onChange={e => setCurrentInstituteData(p => ({...p, name: e.target.value}))} className="w-full p-2 border rounded" />
                             <input type="text" placeholder="Dirección" value={currentInstituteData.address} onChange={e => setCurrentInstituteData(p => ({...p, address: e.target.value}))} className="w-full p-2 border rounded" />
                             <input type="text" placeholder="CIF" value={currentInstituteData.cif} onChange={e => setCurrentInstituteData(p => ({...p, cif: e.target.value}))} className="w-full p-2 border rounded" />
-                            <button onClick={() => { setInstituteData(currentInstituteData); addToast("Datos del instituto guardados.", 'success'); }} className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Datos</button>
+                            <button onClick={() => { setInstituteData(currentInstituteData); addToast('Datos del instituto guardados.', 'success'); }} className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Datos</button>
                         </div>
+                    </DataCard>
+
+                    <DataCard title="Fechas de los Trimestres">
+                        <div className="flex items-center mb-4">
+                            <CalendarDaysIcon className="w-6 h-6 mr-3 text-blue-500"/>
+                            <h3 className="text-xl font-bold text-gray-800">Fechas de los Trimestres</h3>
+                        </div>
+                        <div className="space-y-4">
+                            {(['t1', 't2', 't3'] as const).map((trimestre, index) => (
+                                <div key={trimestre}>
+                                    <h4 className="font-semibold text-gray-700 mb-2">{index + 1}º Trimestre</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-sm text-gray-500">Fecha de Inicio</label>
+                                            <input type="date" value={currentTrimesterDates[trimestre].start} onChange={e => handleTrimesterDateChange(trimestre, 'start', e.target.value)} className="w-full p-2 border rounded mt-1"/>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-500">Fecha de Fin</label>
+                                            <input type="date" value={currentTrimesterDates[trimestre].end} onChange={e => handleTrimesterDateChange(trimestre, 'end', e.target.value)} className="w-full p-2 border rounded mt-1"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                         <button onClick={() => { setTrimesterDates(currentTrimesterDates); addToast('Fechas de los trimestres guardadas.', 'success'); }} className="mt-4 w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition"><SaveIcon className="w-5 h-5 mr-2" />Guardar Fechas</button>
                     </DataCard>
                 </div>
 
                 <div className="space-y-8">
-                    <DataCard>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">Roles de Servicio</h3>
+                    <DataCard title="Roles de Servicio">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <div className="flex justify-between items-center mb-2">
-                                    <h4 className="font-bold">Líderes</h4>
+                                    <h4 className="font-bold">Líderes del Servicio</h4>
                                     <button onClick={() => handleOpenRoleModal(null, 'leader')} className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded hover:bg-blue-200">Añadir</button>
                                 </div>
                                 <div className="space-y-2">
                                     {leaderRoles.map(role => (
                                         <div key={role.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
-                                            <div className="flex items-center cursor-pointer flex-1" onClick={() => handleOpenRoleModal(role)}>
-                                                <div className="w-5 h-5 rounded-sm mr-2 flex-shrink-0" style={{ backgroundColor: role.color }}></div>
-                                                <span className="text-sm truncate">{role.name}</span>
+                                            <div className="flex items-center cursor-pointer" onClick={() => handleOpenRoleModal(role)}>
+                                                <div className="w-5 h-5 rounded-sm mr-2" style={{ backgroundColor: role.color }}></div>
+                                                <span className="text-sm">{role.name}</span>
                                             </div>
                                             <div>
-                                                <button onClick={() => handleDeleteRoleInternal(role.id, role.name)} className="p-1 text-gray-400 hover:text-red-600">
-                                                    <TrashIcon className="w-4 h-4" />
-                                                </button>
+                                                <button onClick={() => handleDeleteRoleInternal(role.id, role.name)} className="p-1 text-gray-400 hover:text-red-600"><TrashIcon className="w-4 h-4" /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -263,20 +274,18 @@ const GestionAppView: React.FC = () => {
                             </div>
                             <div>
                                 <div className="flex justify-between items-center mb-2">
-                                    <h4 className="font-bold">Secundarios</h4>
+                                    <h4 className="font-bold">Roles Secundarios</h4>
                                     <button onClick={() => handleOpenRoleModal(null, 'secondary')} className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded hover:bg-blue-200">Añadir</button>
                                 </div>
                                 <div className="space-y-2">
                                      {secondaryRoles.map(role => (
                                         <div key={role.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
-                                            <div className="flex items-center cursor-pointer flex-1" onClick={() => handleOpenRoleModal(role)}>
-                                                <div className="w-5 h-5 rounded-sm mr-2 flex-shrink-0" style={{ backgroundColor: role.color }}></div>
-                                                <span className="text-sm truncate">{role.name}</span>
+                                            <div className="flex items-center cursor-pointer" onClick={() => handleOpenRoleModal(role)}>
+                                                <div className="w-5 h-5 rounded-sm mr-2" style={{ backgroundColor: role.color }}></div>
+                                                <span className="text-sm">{role.name}</span>
                                             </div>
                                             <div>
-                                                 <button onClick={() => handleDeleteRoleInternal(role.id, role.name)} className="p-1 text-gray-400 hover:text-red-600">
-                                                    <TrashIcon className="w-4 h-4" />
-                                                 </button>
+                                                <button onClick={() => handleDeleteRoleInternal(role.id, role.name)} className="p-1 text-gray-400 hover:text-red-600"><TrashIcon className="w-4 h-4" /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -285,7 +294,7 @@ const GestionAppView: React.FC = () => {
                         </div>
                     </DataCard>
 
-                    <DataCard>
+                    <DataCard title="Backup y Restauración">
                          <h3 className="text-xl font-bold text-gray-800 mb-4">Backup y Restauración</h3>
                          <div className="space-y-6">
                             <div>
@@ -295,7 +304,7 @@ const GestionAppView: React.FC = () => {
                                     {backupOptions.map(key => (
                                         <label key={key} className="flex items-center">
                                             <input type="checkbox" checked={backupKeys.includes(key)} onChange={() => toggleBackupKey(key)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                            <span className="ml-2">{BACKUP_OPTIONS_MAP[key]}</span>
+                                            <span className="ml-2">{key}</span>
                                         </label>
                                     ))}
                                 </div>

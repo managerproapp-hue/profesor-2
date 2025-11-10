@@ -1,7 +1,4 @@
-import React, { ReactNode } from 'react';
-
-// FIX: GradeValue was incorrectly imported. It is now defined here as a reusable type and exported.
-export type GradeValue = number | string | null;
+export type GradeValue = number | null;
 
 export interface Student {
   id: string;
@@ -26,32 +23,42 @@ export interface PracticeGroup {
   studentIds: string[];
 }
 
+export interface ServiceRole {
+    id: string;
+    name: string;
+    color: string;
+    type: 'leader' | 'secondary';
+}
+
 export interface StudentRoleAssignment {
     studentId: string;
-    roleId: string | null;
+    roleId: string;
 }
 
 export interface Elaboration {
-    id:string;
+    id: string;
     name: string;
-    responsibleGroupId: string | null;
+    responsibleGroupId: string;
 }
 
 export interface Service {
-  id: string;
-  name: string;
-  date: string;
-  isLocked: boolean;
-  assignedGroups: {
-      comedor: string[];
-      takeaway: string[];
-  };
-  elaborations: {
-    comedor: Elaboration[];
-    takeaway: Elaboration[];
-  };
-  studentRoles: StudentRoleAssignment[];
-  evaluationId?: string | null;
+    id: string;
+    name: string;
+    date: string;
+    isLocked: boolean;
+    assignedGroups: {
+        comedor: string[];
+        takeaway: string[];
+    };
+    elaborations: {
+        comedor: Elaboration[];
+        takeaway: Elaboration[];
+    };
+    studentRoles: StudentRoleAssignment[];
+}
+
+export interface PreServiceBehaviorScores {
+    [itemId: string]: number | null;
 }
 
 export interface PreServiceIndividualEvaluation {
@@ -59,13 +66,14 @@ export interface PreServiceIndividualEvaluation {
     hasFichas: boolean;
     hasUniforme: boolean;
     hasMaterial: boolean;
-    behaviorScores: { [itemId: string]: number | null }; // 2 for ++, 1 for +, 0 for -
+    behaviorScores: PreServiceBehaviorScores;
     observations: string;
 }
 
-export interface ServiceDayGroupScores {
-    scores: (number | null)[];
-    observations: string;
+export interface PreServiceDayEvaluation {
+    name: string;
+    groupObservations: { [groupId: string]: string };
+    individualEvaluations: { [studentId: string]: PreServiceIndividualEvaluation };
 }
 
 export interface ServiceDayIndividualScores {
@@ -74,10 +82,9 @@ export interface ServiceDayIndividualScores {
     observations: string;
 }
 
-export interface PreServiceDayEvaluation {
-    name?: string;
-    groupObservations: { [groupId: string]: string };
-    individualEvaluations: { [studentId: string]: PreServiceIndividualEvaluation };
+export interface ServiceDayGroupScores {
+    scores: (number | null)[];
+    observations: string;
 }
 
 export interface ServiceEvaluation {
@@ -90,97 +97,68 @@ export interface ServiceEvaluation {
     };
 }
 
-
 export interface EntryExitRecord {
-  id: string;
-  studentId: string;
-  date: string;
-  type: 'Salida Anticipada' | 'Llegada Tarde';
-  reason: string;
-}
-
-export interface ServiceRole {
-  id: string;
-  name: string;
-  color: string;
-  type: 'leader' | 'secondary';
-}
-
-export type ExamPeriod = 't1' | 't2' | 'rec';
-
-export interface PracticalExamEvaluation {
     id: string;
     studentId: string;
-    examPeriod: ExamPeriod;
-    scores: Record<string, Record<string, { score: number | null; notes: string }>>;
-    finalScore?: number;
+    date: string;
+    type: 'Salida Anticipada' | 'Llegada Tarde';
+    reason: string;
 }
 
-export interface TeacherData {
-  name: string;
-  email: string;
-  logo: string | null;
-}
-export interface InstituteData {
-  name: string;
-  address: string;
-  cif: string;
-  logo: string | null;
-}
-
-// Type for the calculated summary of grades for a student
-export interface StudentCalculatedGrades {
-    serviceAverage: number | null;
-    practicalExams: {
-        t1: number | null;
-        t2: number | null;
-        rec: number | null;
-    };
-}
-
-// --- LEGACY TYPES for pages/FichaAlumno.tsx (not used in main app flow) ---
 export interface PrincipalGrade {
-    servicios?: GradeValue;
-    practico?: GradeValue;
-    teorico1?: GradeValue;
-    teorico2?: GradeValue;
+    servicios: GradeValue;
+    practico: GradeValue;
+    teorico1: GradeValue;
+    teorico2: GradeValue;
 }
 
 export interface PrincipalGrades {
-    [studentId: string]: {
-        t1?: PrincipalGrade;
-        t2?: PrincipalGrade;
-        t3?: PrincipalGrade;
-        recFinal?: GradeValue;
-    }
+  [studentId: string]: {
+    t1: PrincipalGrade;
+    t2: PrincipalGrade;
+    t3: PrincipalGrade;
+    recFinal: GradeValue;
+  };
 }
 
 export interface OtherModuleGrade {
-    t1?: GradeValue;
-    t2?: GradeValue;
-    t3?: GradeValue;
-    rec?: GradeValue;
+    t1: GradeValue;
+    t2: GradeValue;
+    t3: GradeValue;
+    rec: GradeValue;
 }
 
 export interface OtherGrades {
     [studentId: string]: {
         [moduleName: string]: OtherModuleGrade;
-    }
+    };
 }
 
+export type ExamPeriod = 't1' | 't2' | 'rec';
 
-// --- NEW ACADEMIC MANAGEMENT TYPES ---
-
-export interface ManualGradeEntry {
-    [instrumentKey: string]: GradeValue;
+export interface PracticalExamCriterionScore {
+    score: number | null;
+    notes: string;
 }
 
-export interface AcademicPeriodGrades {
-    manualGrades: ManualGradeEntry;
+export interface PracticalExamEvaluation {
+    id: string;
+    studentId: string;
+    examPeriod: ExamPeriod;
+    scores: {
+        [raId: string]: {
+            [criterionId: string]: PracticalExamCriterionScore;
+        };
+    };
+    finalScore?: number;
+}
+
+export interface StudentAcademicPeriodGrades {
+    manualGrades: { [instrumentKey: string]: GradeValue };
 }
 
 export interface StudentAcademicGrades {
-    [periodKey: string]: AcademicPeriodGrades;
+    [periodKey: string]: StudentAcademicPeriodGrades;
 }
 
 export interface AcademicGrades {
@@ -188,81 +166,54 @@ export interface AcademicGrades {
 }
 
 export interface CourseModuleGrades {
-    t1?: GradeValue;
-    t2?: GradeValue;
-    t3?: GradeValue;
-    rec?: GradeValue;
+    t1: GradeValue;
+    t2: GradeValue;
+    t3: GradeValue;
+    rec: GradeValue;
 }
 
 export interface StudentCourseGrades {
-    [moduleName: string]: CourseModuleGrades;
+    [module: string]: Partial<CourseModuleGrades>;
 }
 
 export interface CourseGrades {
     [studentId: string]: StudentCourseGrades;
 }
 
-// --- NEW TOAST NOTIFICATION TYPE ---
+export interface TeacherData {
+    name: string;
+    email: string;
+    logo: string | null;
+}
+
+export interface InstituteData {
+    name: string;
+    address: string;
+    cif: string;
+    logo: string | null;
+}
+
 export type ToastType = 'success' | 'error' | 'info';
 
 export interface Toast {
-    id: number;
+    id: string;
     message: string;
     type: ToastType;
 }
 
-// --- NEW APP CONTEXT TYPE ---
-export interface AppContextType {
-    // State
-    students: Student[];
-    practiceGroups: PracticeGroup[];
-    services: Service[];
-    serviceEvaluations: ServiceEvaluation[];
-    serviceRoles: ServiceRole[];
-    entryExitRecords: EntryExitRecord[];
-    practicalExamEvaluations: PracticalExamEvaluation[];
-    teacherData: TeacherData;
-    instituteData: InstituteData;
-    academicGrades: AcademicGrades;
-    courseGrades: CourseGrades;
-    toasts: Toast[];
-
-    // Setters / Handlers
-    setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
-    setPracticeGroups: React.Dispatch<React.SetStateAction<PracticeGroup[]>>;
-    setServices: React.Dispatch<React.SetStateAction<Service[]>>;
-    setServiceEvaluations: React.Dispatch<React.SetStateAction<ServiceEvaluation[]>>;
-    setServiceRoles: React.Dispatch<React.SetStateAction<ServiceRole[]>>;
-    setEntryExitRecords: React.Dispatch<React.SetStateAction<EntryExitRecord[]>>;
-    setPracticalExamEvaluations: React.Dispatch<React.SetStateAction<PracticalExamEvaluation[]>>;
-    setTeacherData: React.Dispatch<React.SetStateAction<TeacherData>>;
-    setInstituteData: React.Dispatch<React.SetStateAction<InstituteData>>;
-    setAcademicGrades: React.Dispatch<React.SetStateAction<AcademicGrades>>;
-    setCourseGrades: React.Dispatch<React.SetStateAction<CourseGrades>>;
-    
-    // Calculated Data
-    calculatedStudentGrades: Record<string, StudentCalculatedGrades>;
-
-    // Business Logic Functions
-    handleFileUpload: (file: File) => Promise<{ success: boolean; error?: string | null; }>;
-    handleSaveEntryExitRecord: (record: Omit<EntryExitRecord, 'studentId' | 'id'>, studentIds: string[]) => void;
-    handleSavePracticalExam: (evaluation: PracticalExamEvaluation) => void;
-    handleCreateService: () => string;
-    handleSaveServiceAndEvaluation: (service: Service, evaluation: ServiceEvaluation) => void;
-    handleDeleteService: (serviceId: string) => void;
-    handleDeleteRole: (roleId: string) => void;
-    handleUpdateStudent: (student: Student) => void;
-    
-    // Toast Notifications
-    addToast: (message: string, type: ToastType) => void;
+export interface StudentCalculatedGrades {
+    serviceAverages: {
+        t1: number | null;
+        t2: number | null;
+        t3: number | null;
+    };
+    practicalExams: {
+        t1: number | null;
+        t2: number | null;
+        rec: number | null;
+    };
 }
 
-// --- NEW PROVIDER PROPS TYPE ---
-export interface AppProviderProps {
-    children: ReactNode;
-}
-
-// --- NEW REPORTING VIEW MODEL ---
 export interface ReportViewModel {
     service: Service;
     evaluation: ServiceEvaluation;
@@ -271,11 +222,21 @@ export interface ReportViewModel {
     serviceRoles: ServiceRole[];
     teacherData: TeacherData;
     instituteData: InstituteData;
-    entryExitRecords: EntryExitRecord[];
-    // Derived data
     participatingStudents: Student[];
     groupedStudentsInService: {
         group: PracticeGroup;
         students: Student[];
     }[];
+    entryExitRecords: EntryExitRecord[];
+}
+
+export interface TrimesterDateRange {
+    start: string;
+    end: string;
+}
+
+export interface TrimesterDates {
+    t1: TrimesterDateRange;
+    t2: TrimesterDateRange;
+    t3: TrimesterDateRange;
 }
