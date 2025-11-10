@@ -119,13 +119,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
             onClick={() => setActiveView('calificaciones')}
             isCollapsed={isCollapsed}
           />
-          <NavLink
-            icon={FileTextIcon}
-            label="Informes"
-            isActive={activeView === 'informes'}
-            onClick={() => setActiveView('informes')}
-            isCollapsed={isCollapsed}
-          />
 
           <h3 className={`px-4 pt-4 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isCollapsed ? 'hidden' : 'block'}`}>
             Otros

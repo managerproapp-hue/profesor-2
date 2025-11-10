@@ -271,6 +271,7 @@ export interface ReportViewModel {
     serviceRoles: ServiceRole[];
     teacherData: TeacherData;
     instituteData: InstituteData;
+    entryExitRecords: EntryExitRecord[];
     // Derived data
     participatingStudents: Student[];
     groupedStudentsInService: {

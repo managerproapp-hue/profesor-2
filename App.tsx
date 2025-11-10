@@ -13,7 +13,6 @@ const ExamenesPracticosView = lazy(() => import('./views/ExamenesPracticosView')
 const NotasServicioView = lazy(() => import('./views/NotasServicioView'));
 const RegistroSalidasEntradasView = lazy(() => import('./views/RegistroSalidasEntradasView'));
 const GestionAppView = lazy(() => import('./views/GestionAppView'));
-const InformesView = lazy(() => import('./views/InformesView'));
 const GestionAcademicaView = lazy(() => import('./views/GestionAcademicaView'));
 
 
@@ -59,8 +58,6 @@ const AppContent: React.FC = () => {
                 return <NotasServicioView onNavigateToService={handleNavigateToService} />;
             case 'gestion-academica':
                 return <GestionAcademicaView />;
-            case 'informes':
-                return <InformesView />;
             case 'salidas-entradas':
                 return <RegistroSalidasEntradasView />;
             case 'gestion-app':

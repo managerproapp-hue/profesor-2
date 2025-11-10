@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Service, ServiceEvaluation, ReportViewModel } from '../types';
+import { Service, ServiceEvaluation, ReportViewModel, Student } from '../types';
 import { useAppContext } from '../context/AppContext';
-import { XIcon, DownloadIcon, FileTextIcon } from './icons';
-import { generatePlanningPDF, generateTrackingSheetPDF } from '../services/reportGenerator';
+import { XIcon, DownloadIcon, FileTextIcon, UsersIcon } from './icons';
+import { generatePlanningPDF, generateTrackingSheetPDF, generateDetailedStudentServiceReportPDF } from '../services/reportGenerator';
 
 
 interface ReportsCenterModalProps {
@@ -11,7 +11,7 @@ interface ReportsCenterModalProps {
     onClose: () => void;
 }
 
-type ReportType = 'planning' | 'trackingSheet';
+type ReportType = 'planning' | 'trackingSheet' | 'detailedStudentReport';
 
 const REPORTS: { id: ReportType; name: string; description: string }[] = [
     {
@@ -23,17 +23,23 @@ const REPORTS: { id: ReportType; name: string; description: string }[] = [
         id: 'trackingSheet',
         name: 'Ficha de Seguimiento',
         description: 'Crea la ficha de seguimiento semanal para la evaluación previa al servicio, incluyendo asistencia, materiales y conducta.'
+    },
+    {
+        id: 'detailedStudentReport',
+        name: 'Informe Detallado por Alumno',
+        description: 'Genera un informe exhaustivo con la evaluación individual, grupal y las incidencias de un alumno específico para este servicio.'
     }
 ];
 
 const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evaluation, onClose }) => {
-    const { students, practiceGroups, serviceRoles, teacherData, instituteData } = useAppContext();
+    const { students, practiceGroups, serviceRoles, teacherData, instituteData, entryExitRecords } = useAppContext();
     const [activeReport, setActiveReport] = useState<ReportType | null>(null);
     const [viewModel, setViewModel] = useState<ReportViewModel | null>(null);
+    const [selectedStudentForReport, setSelectedStudentForReport] = useState<string>('');
+
 
     useEffect(() => {
         // --- VIEWMODEL CREATION ---
-        // 1. Normalize data to prevent errors with older data structures
         const normalizedService: Service = {
             ...service,
             assignedGroups: service.assignedGroups ?? { comedor: [], takeaway: [] },
@@ -48,7 +54,6 @@ const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evalua
             serviceDay: evaluation.serviceDay ?? { groupScores: {}, individualScores: {} },
         };
 
-        // 2. Pre-calculate derived data
         const assignedGroupIds = [...(normalizedService.assignedGroups.comedor || []), ...(normalizedService.assignedGroups.takeaway || [])];
         const participatingGroups = practiceGroups.filter(g => assignedGroupIds.includes(g.id));
         const participatingStudentIds = new Set(participatingGroups.flatMap(g => g.studentIds));
@@ -63,7 +68,6 @@ const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evalua
                     .sort((a,b) => a.apellido1.localeCompare(b.apellido1))
             }));
 
-        // 3. Set the final view model
         setViewModel({
             service: normalizedService,
             evaluation: normalizedEvaluation,
@@ -74,9 +78,23 @@ const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evalua
             instituteData,
             participatingStudents,
             groupedStudentsInService,
+            entryExitRecords, // Add entryExitRecords to the view model
         });
-    }, [service, evaluation, students, practiceGroups, serviceRoles, teacherData, instituteData]);
+        
+        // Reset selected student if the list of participants changes
+        if (participatingStudents.length > 0) {
+            setSelectedStudentForReport(participatingStudents[0].id);
+        } else {
+            setSelectedStudentForReport('');
+        }
+
+    }, [service, evaluation, students, practiceGroups, serviceRoles, teacherData, instituteData, entryExitRecords]);
     
+     useEffect(() => {
+        // Reset student selection when changing report type
+        setSelectedStudentForReport(viewModel?.participatingStudents[0]?.id || '');
+    }, [activeReport, viewModel?.participatingStudents]);
+
     const handleDownload = () => {
         if (!viewModel || !activeReport) return;
 
@@ -87,12 +105,20 @@ const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evalua
             case 'trackingSheet':
                 generateTrackingSheetPDF(viewModel);
                 break;
+            case 'detailedStudentReport':
+                if (selectedStudentForReport) {
+                    generateDetailedStudentServiceReportPDF(viewModel, selectedStudentForReport);
+                } else {
+                    alert('Por favor, selecciona un alumno para generar el informe.');
+                }
+                break;
             default:
                 console.error('Unknown report type selected');
         }
     };
     
     const selectedReportDetails = useMemo(() => REPORTS.find(r => r.id === activeReport), [activeReport]);
+    const isDownloadDisabled = !viewModel || (activeReport === 'detailedStudentReport' && !selectedStudentForReport);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
@@ -107,7 +133,6 @@ const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evalua
                     </button>
                 </header>
                 <div className="flex flex-1 overflow-hidden">
-                    {/* Left Column: Report Selection */}
                     <aside className="w-1/3 border-r bg-gray-50 overflow-y-auto">
                         <nav className="p-4 space-y-2">
                             <h3 className="px-2 text-sm font-semibold text-gray-500">Informes Disponibles</h3>
@@ -126,18 +151,39 @@ const ReportsCenterModal: React.FC<ReportsCenterModalProps> = ({ service, evalua
                             ))}
                         </nav>
                     </aside>
-                    {/* Right Column: Preview & Action */}
                     <main className="w-2/3 flex flex-col p-6">
                         {selectedReportDetails ? (
                             <>
                                 <div className="flex-1">
                                     <h3 className="text-2xl font-bold text-gray-800">{selectedReportDetails.name}</h3>
                                     <p className="mt-2 text-gray-600">{selectedReportDetails.description}</p>
+                                    
+                                    {activeReport === 'detailedStudentReport' && viewModel?.participatingStudents && (
+                                        <div className="mt-6">
+                                            <label htmlFor="student-select" className="block text-sm font-medium text-gray-700 flex items-center">
+                                                <UsersIcon className="w-5 h-5 mr-2 text-gray-500" />
+                                                Seleccionar Alumno
+                                            </label>
+                                            <select
+                                                id="student-select"
+                                                value={selectedStudentForReport}
+                                                onChange={(e) => setSelectedStudentForReport(e.target.value)}
+                                                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                                            >
+                                                {viewModel.participatingStudents.map((student: Student) => (
+                                                    <option key={student.id} value={student.id}>
+                                                        {`${student.apellido1} ${student.apellido2}, ${student.nombre}`}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
                                 </div>
                                 <div className="mt-6">
                                     <button
                                         onClick={handleDownload}
-                                        disabled={!viewModel}
+                                        disabled={isDownloadDisabled}
                                         className="w-full flex items-center justify-center bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
                                     >
                                         <DownloadIcon className="w-5 h-5 mr-2" />

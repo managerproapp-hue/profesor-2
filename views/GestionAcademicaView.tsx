@@ -5,6 +5,7 @@ import { ACADEMIC_EVALUATION_STRUCTURE, COURSE_MODULES } from '../data/constants
 import { ClipboardListIcon, SaveIcon, ExportIcon } from '../components/icons';
 import { downloadPdfWithTables } from '../components/printUtils';
 import { useAppContext } from '../context/AppContext';
+import { calculateStudentPeriodAverages } from '../services/gradeCalculator';
 
 const GestionAcademicaView: React.FC = () => {
     const { students, academicGrades, setAcademicGrades, courseGrades, setCourseGrades, calculatedStudentGrades, teacherData, instituteData, addToast } = useAppContext();
@@ -21,7 +22,6 @@ const GestionAcademicaView: React.FC = () => {
     }, [academicGrades, courseGrades]);
 
     const finalGradesAndAverages = useMemo(() => {
-        const results: Record<string, any> = { averages: {} };
         const studentGroups = students.reduce((acc, student) => {
             (acc[student.grupo] = acc[student.grupo] || []).push(student);
             return acc;
@@ -31,42 +31,14 @@ const GestionAcademicaView: React.FC = () => {
             studentGroups[groupName].sort((a,b) => a.apellido1.localeCompare(b.apellido1));
         });
 
+        const studentGrades: Record<string, { averages: Record<string, number | null> }> = {};
         students.forEach(student => {
-            results[student.id] = { averages: {} };
-            ACADEMIC_EVALUATION_STRUCTURE.periods.forEach(period => {
-                let totalWeight = 0;
-                let weightedSum = 0;
-                // FIX: Correctly retrieve calculated grades to avoid type errors.
-                period.instruments.forEach(instrument => {
-                    let grade: number | null = null;
-                    if (instrument.type === 'manual') {
-                        const manualGrade = localAcademicGrades[student.id]?.[period.key]?.manualGrades?.[instrument.key];
-                        grade = (manualGrade === null || manualGrade === undefined) ? null : parseFloat(String(manualGrade));
-                    } else { // calculated
-                        if (instrument.key === 'servicios') {
-                            grade = calculatedStudentGrades[student.id]?.serviceAverage ?? null;
-                        } else {
-                            const examKeyMap: Record<string, keyof StudentCalculatedGrades['practicalExams']> = {
-                                'exPracticoT1': 't1',
-                                'exPracticoT2': 't2',
-                                'exPracticoRec': 'rec',
-                            };
-                            const examKey = examKeyMap[instrument.key];
-                            if (examKey) {
-                                grade = calculatedStudentGrades[student.id]?.practicalExams[examKey] ?? null;
-                            }
-                        }
-                    }
-                    
-                    if (grade !== null && !isNaN(grade)) {
-                        weightedSum += grade * instrument.weight;
-                        totalWeight += instrument.weight;
-                    }
-                });
-                results[student.id].averages[period.key] = totalWeight > 0 ? parseFloat((weightedSum / totalWeight).toFixed(2)) : null;
-            });
+            studentGrades[student.id] = {
+                averages: calculateStudentPeriodAverages(localAcademicGrades[student.id], calculatedStudentGrades[student.id])
+            };
         });
-        return { studentGroups, studentGrades: results };
+        
+        return { studentGroups, studentGrades };
     }, [students, localAcademicGrades, calculatedStudentGrades]);
 
     const handleManualGradeChange = (studentId: string, periodKey: string, instrumentKey: string, value: string) => {

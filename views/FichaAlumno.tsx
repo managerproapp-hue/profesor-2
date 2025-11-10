@@ -6,6 +6,7 @@ import {
     CameraIcon,
     SaveIcon
 } from '../components/icons';
+import { calculateStudentPeriodAverages } from '../services/gradeCalculator';
 
 interface FichaAlumnoProps {
   student: Student;
@@ -114,32 +115,7 @@ const FichaAlumno: React.FC<FichaAlumnoProps> = ({ student, onBack, entryExitRec
   };
   
   const finalAverages = useMemo(() => {
-    const results: { [periodKey: string]: number | null } = {};
-    if (academicGrades) {
-        ACADEMIC_EVALUATION_STRUCTURE.periods.forEach(period => {
-            let totalWeight = 0;
-            let weightedSum = 0;
-            period.instruments.forEach(instrument => {
-                let grade: number | null = null;
-                if (instrument.type === 'manual') {
-                    const manualGrade = academicGrades[period.key]?.manualGrades?.[instrument.key];
-                    grade = (manualGrade === null || manualGrade === undefined) ? null : parseFloat(String(manualGrade));
-                } else {
-                    if (instrument.key === 'servicios') grade = calculatedGrades?.serviceAverage ?? null;
-                    else {
-                        const examKey = { 'exPracticoT1': 't1', 'exPracticoT2': 't2', 'exPracticoRec': 'rec' }[instrument.key] as 't1' | 't2' | 'rec';
-                        if (examKey) grade = calculatedGrades?.practicalExams[examKey] ?? null;
-                    }
-                }
-                if (grade !== null && !isNaN(grade)) {
-                    weightedSum += grade * instrument.weight;
-                    totalWeight += instrument.weight;
-                }
-            });
-            results[period.key] = totalWeight > 0 ? parseFloat((weightedSum / totalWeight).toFixed(2)) : null;
-        });
-    }
-    return results;
+    return calculateStudentPeriodAverages(academicGrades, calculatedGrades);
   }, [academicGrades, calculatedGrades]);
 
   return (
