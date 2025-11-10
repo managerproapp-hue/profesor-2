@@ -1,11 +1,7 @@
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-// FIX: Correct import path for types.
+import autoTable from 'jspdf-autotable';
 import { TeacherData, InstituteData } from '../types';
-
-// FIX: Remove module augmentation and use type casting instead to avoid module resolution errors.
-
 
 // Function to safely add an image and handle potential errors
 const addImageToPdf = (doc: jsPDF, imageData: string, x: number, y: number, width: number, height: number) => {
@@ -44,8 +40,7 @@ export const downloadPdfWithTables = (
   headers.forEach((header, index) => {
     const body = bodies[index];
     
-    // FIX: Cast doc to any to call autoTable without augmentation.
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: header,
       body: body,
       startY: 45, // Start table after the header

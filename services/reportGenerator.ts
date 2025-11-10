@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { ReportViewModel } from '../types';
 import { PRE_SERVICE_BEHAVIOR_ITEMS } from '../data/constants';
 
@@ -61,8 +61,8 @@ export const generatePlanningPDF = (viewModel: ReportViewModel) => {
 
     // Groups & Elaborations
     const elaborationsBody = [];
-    const comedorGroups = service.assignedGroups.comedor.map(id => viewModel.practiceGroups.find(g => g.id === id)?.name).join(', ');
-    const takeawayGroups = service.assignedGroups.takeaway.map(id => viewModel.practiceGroups.find(g => g.id === id)?.name).join(', ');
+    const comedorGroups = service.assignedGroups.comedor.map(id => viewModel.practiceGroups.find(g => g.id === id)?.name).filter(Boolean).join(', ');
+    const takeawayGroups = service.assignedGroups.takeaway.map(id => viewModel.practiceGroups.find(g => g.id === id)?.name).filter(Boolean).join(', ');
 
     const maxElaborations = Math.max(service.elaborations.comedor.length, service.elaborations.takeaway.length);
     for (let i = 0; i < maxElaborations; i++) {
@@ -73,7 +73,7 @@ export const generatePlanningPDF = (viewModel: ReportViewModel) => {
         elaborationsBody.push([comedorElabText, takeawayElabText]);
     }
 
-    (doc as any).autoTable({
+    autoTable(doc, {
         startY: lastY,
         head: [['COMEDOR', 'TAKEAWAY']],
         body: [[{content: `Grupos: ${comedorGroups || 'Ninguno'}`, styles: {fontStyle: 'bold'}}, {content: `Grupos: ${takeawayGroups || 'Ninguno'}`, styles: {fontStyle: 'bold'}}]],
@@ -82,7 +82,7 @@ export const generatePlanningPDF = (viewModel: ReportViewModel) => {
         didDrawPage: didDrawPage
     });
     
-    (doc as any).autoTable({
+    autoTable(doc, {
         startY: (doc as any).lastAutoTable.finalY,
         head: [['Elaboraciones Comedor', 'Elaboraciones Takeaway']],
         body: elaborationsBody.length > 0 ? elaborationsBody : [['-', '-']],
@@ -100,7 +100,7 @@ export const generatePlanningPDF = (viewModel: ReportViewModel) => {
         return [`${student.apellido1} ${student.apellido2}, ${student.nombre}`, group?.name || 'N/A', role?.name || 'Sin asignar'];
     });
     
-    (doc as any).autoTable({
+    autoTable(doc, {
         startY: lastY,
         head: [['Alumno', 'Grupo', 'Puesto Asignado']],
         body: studentRolesBody,
@@ -159,13 +159,13 @@ export const generateTrackingSheetPDF = (viewModel: ReportViewModel) => {
             lastY = 40;
         }
         
-        (doc as any).autoTable({
+        autoTable(doc, {
             startY: lastY,
             head: [[{ content: `Grupo: ${groupData.group.name}`, colSpan: groupData.students.length + 1, styles: { halign: 'center', fillColor: [220, 220, 220], textColor: 0 } }]],
             didDrawPage
         });
         
-        (doc as any).autoTable({
+        autoTable(doc, {
             startY: (doc as any).lastAutoTable.finalY,
             head: head,
             body: body,
