@@ -35,7 +35,7 @@ const PreServiceIndividualTable: React.FC<{
             <table className="min-w-full text-xs border-collapse">
                 <thead className="bg-gray-100">
                     <tr>
-                        <th className="p-2 border font-semibold text-gray-600 w-1/4 text-left">Criterio</th>
+                        <th className="p-2 border font-semibold text-gray-600 w-1/4 text-left">Criterio Individual</th>
                         {studentsInGroup.map(s => <th key={s.id} className="p-2 border font-semibold text-gray-600 truncate">{s.apellido1} {s.nombre.charAt(0)}.</th>)}
                     </tr>
                 </thead>
@@ -77,7 +77,7 @@ const PreServiceIndividualTable: React.FC<{
                             )})}
                         </tr>
                     ))}
-                     <tr className="bg-gray-50"><td colSpan={studentsInGroup.length + 1} className="p-1 border text-center font-semibold">Observaciones</td></tr>
+                     <tr className="bg-gray-50"><td colSpan={studentsInGroup.length + 1} className="p-1 border text-center font-semibold">Observaciones Individuales</td></tr>
                      <tr>
                         <td className="p-2 border text-left font-medium">Incidencias (Salidas/Entradas)</td>
                         {studentsInGroup.map(s => (
@@ -331,6 +331,15 @@ const ServiceEvaluationView: React.FC<ServiceEvaluationViewProps> = ({ service, 
             }
         });
     };
+
+    const handlePreServiceGroupObservationChange = (date: string, groupId: string, value: string) => {
+        deepCloneAndUpdate(draft => {
+            if (!draft.preService[date].groupObservations) {
+                draft.preService[date].groupObservations = {};
+            }
+            draft.preService[date].groupObservations[groupId] = value;
+        });
+    };
     
     const handlePreServiceNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!activePreServiceDate) return;
@@ -424,9 +433,34 @@ const ServiceEvaluationView: React.FC<ServiceEvaluationViewProps> = ({ service, 
 
                     {activePreServiceDate && evaluation.preService[activePreServiceDate] && participatingGroups.map(group => {
                         const groupStudents = students.filter(s => group.studentIds.includes(s.id)).sort((a, b) => a.apellido1.localeCompare(b.apellido1));
+                        const assignedElaborations = [...service.elaborations.comedor, ...service.elaborations.takeaway].filter(e => e.responsibleGroupId === group.id);
+
                         return (
                             <div key={group.id} className="bg-white p-4 rounded-lg shadow-sm">
                                 <h3 className="text-xl font-bold mb-3 text-gray-700">{group.name}</h3>
+                                
+                                {assignedElaborations.length > 0 && (
+                                    <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                                        <h4 className="text-sm font-semibold text-gray-600 mb-1">Elaboraciones Asignadas:</h4>
+                                        <ul className="list-disc list-inside text-sm text-gray-800">
+                                            {assignedElaborations.map(e => <li key={e.id}>{e.name}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                
+                                <div className="mb-4">
+                                    <label htmlFor={`group-obs-${group.id}`} className="block text-sm font-semibold text-gray-600 mb-1">Observaciones del Grupo</label>
+                                    <textarea
+                                        id={`group-obs-${group.id}`}
+                                        value={evaluation.preService[activePreServiceDate]?.groupObservations[group.id] || ''}
+                                        onChange={(e) => handlePreServiceGroupObservationChange(activePreServiceDate, group.id, e.target.value)}
+                                        disabled={isLocked}
+                                        rows={3}
+                                        className="w-full p-2 text-sm border rounded-md bg-white disabled:bg-gray-100"
+                                        placeholder="Anotaciones sobre el comportamiento, limpieza, organización, etc. del grupo en general."
+                                    />
+                                </div>
+                                
                                 <PreServiceIndividualTable 
                                     studentsInGroup={groupStudents}
                                     evaluationData={evaluation.preService[activePreServiceDate]}
