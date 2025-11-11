@@ -125,8 +125,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const t2Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't2');
             const recExam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 'rec');
 
-            const serviceGradesByTrimester: { t1: number[], t2: number[], t3: number[] } = { t1: [], t2: [], t3: [] };
-            
+            // Step 1: Collect all scores per trimester
+            const trimesterScores: {
+                t1: { individual: number[], group: number[] },
+                t2: { individual: number[], group: number[] },
+                t3: { individual: number[], group: number[] }
+            } = {
+                t1: { individual: [], group: [] },
+                t2: { individual: [], group: [] },
+                t3: { individual: [], group: [] }
+            };
+
             serviceEvaluations.forEach(evaluation => {
                 const service = services.find(s => s.id === evaluation.serviceId);
                 if (!service) return;
@@ -134,35 +143,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const serviceDate = new Date(service.date);
                 const trimester = getTrimester(serviceDate);
                 if (!trimester) return;
-                
+
                 const individualEval = evaluation.serviceDay.individualScores[student.id];
                 if (individualEval && individualEval.attendance) {
-                    const individualScore = (individualEval.scores || []).reduce((sum, score) => sum + (score || 0), 0);
-                    
+                    const hasIndividualScores = individualEval.scores && individualEval.scores.some(s => s !== null);
+                    if (hasIndividualScores) {
+                        const individualScore = (individualEval.scores || []).reduce((sum, score) => sum + (score || 0), 0);
+                        trimesterScores[trimester].individual.push(individualScore);
+                    }
+
                     const studentPracticeGroup = practiceGroups.find(pg => pg.studentIds.includes(student.id));
-                    let groupScore = 0;
                     if (studentPracticeGroup) {
                         const groupEval = evaluation.serviceDay.groupScores[studentPracticeGroup.id];
-                        if (groupEval) {
-                            groupScore = (groupEval.scores || []).reduce((sum, score) => sum + (score || 0), 0);
+                        const hasGroupScores = groupEval && groupEval.scores && groupEval.scores.some(s => s !== null);
+                        if (hasGroupScores) {
+                            const groupScore = (groupEval.scores || []).reduce((sum, score) => sum + (score || 0), 0);
+                            trimesterScores[trimester].group.push(groupScore);
                         }
                     }
-                    
-                    const weightedServiceGrade = (individualScore * SERVICE_GRADE_WEIGHTS.individual) + (groupScore * SERVICE_GRADE_WEIGHTS.group);
-                    serviceGradesByTrimester[trimester].push(weightedServiceGrade);
                 }
             });
             
-            const calculateAverage = (grades: number[]) => grades.length > 0
-                ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length
-                : null;
+            // Step 2: Calculate averages and final weighted grade for each trimester
+            const serviceAverages: { t1: number | null, t2: number | null, t3: number | null } = { t1: null, t2: null, t3: null };
+
+            (['t1', 't2', 't3'] as const).forEach(trimester => {
+                const individualAvg = trimesterScores[trimester].individual.length > 0
+                    ? trimesterScores[trimester].individual.reduce((a, b) => a + b, 0) / trimesterScores[trimester].individual.length
+                    : null;
+                
+                const groupAvg = trimesterScores[trimester].group.length > 0
+                    ? trimesterScores[trimester].group.reduce((a, b) => a + b, 0) / trimesterScores[trimester].group.length
+                    : null;
+
+                if (individualAvg !== null && groupAvg !== null) {
+                    serviceAverages[trimester] = (individualAvg * SERVICE_GRADE_WEIGHTS.individual) + (groupAvg * SERVICE_GRADE_WEIGHTS.group);
+                } else if (individualAvg !== null) {
+                    serviceAverages[trimester] = individualAvg;
+                } else if (groupAvg !== null) {
+                    serviceAverages[trimester] = groupAvg;
+                } else {
+                    serviceAverages[trimester] = null;
+                }
+            });
             
             studentGrades[student.id] = {
-                serviceAverages: {
-                    t1: calculateAverage(serviceGradesByTrimester.t1),
-                    t2: calculateAverage(serviceGradesByTrimester.t2),
-                    t3: calculateAverage(serviceGradesByTrimester.t3),
-                },
+                serviceAverages,
                 practicalExams: {
                     t1: t1Exam?.finalScore ?? null,
                     t2: t2Exam?.finalScore ?? null,
