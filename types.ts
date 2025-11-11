@@ -134,7 +134,7 @@ export interface OtherGrades {
     };
 }
 
-export type ExamPeriod = 't1' | 't2' | 'rec';
+export type ExamPeriod = 't1' | 't2' | 't3' | 'rec';
 
 export interface PracticalExamCriterionScore {
     score: number | null;
@@ -210,6 +210,7 @@ export interface StudentCalculatedGrades {
     practicalExams: {
         t1: number | null;
         t2: number | null;
+        t3: number | null;
         rec: number | null;
     };
 }

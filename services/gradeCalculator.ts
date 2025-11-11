@@ -28,7 +28,7 @@ export const calculateStudentPeriodAverages = (
                     grade = calculatedGrades.serviceAverages[periodKey] ?? null;
                 } else {
                     const examKeyMap: Record<string, keyof StudentCalculatedGrades['practicalExams']> = {
-                        'exPracticoT1': 't1', 'exPracticoT2': 't2', 'exPracticoRec': 'rec',
+                        'exPracticoT1': 't1', 'exPracticoT2': 't2', 'exPracticoT3': 't3', 'exPracticoRec': 'rec',
                     };
                     const examKey = examKeyMap[instrument.key];
                     if (examKey) {

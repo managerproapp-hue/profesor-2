@@ -138,6 +138,7 @@ const GestionAcademicaView: React.FC = () => {
                                                             const examKeyMap: Record<string, keyof StudentCalculatedGrades['practicalExams']> = {
                                                                 'exPracticoT1': 't1',
                                                                 'exPracticoT2': 't2',
+                                                                'exPracticoT3': 't3',
                                                                 'exPracticoRec': 'rec',
                                                             };
                                                             const examKey = examKeyMap[instrument.key];

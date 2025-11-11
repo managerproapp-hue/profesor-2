@@ -109,7 +109,7 @@ const ExamenesPracticosView: React.FC<ExamenesPracticosViewProps> = ({ isFocusMo
                 <header className="flex justify-between items-center mb-4 pb-4 border-b">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Evaluando a: {student?.nombre} {student?.apellido1}</h2>
-                        <p className="text-sm text-gray-500">Rúbrica para el {activePeriod === 't1' ? '1º Trimestre' : activePeriod === 't2' ? '2º Trimestre' : 'Recuperación'}</p>
+                        <p className="text-sm text-gray-500">Rúbrica para el {activePeriod === 't1' ? '1º Trimestre' : activePeriod === 't2' ? '2º Trimestre' : activePeriod === 't3' ? '3º Trimestre' : 'Recuperación'}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-sm font-medium text-gray-500">NOTA FINAL</p>
@@ -170,11 +170,11 @@ const ExamenesPracticosView: React.FC<ExamenesPracticosViewProps> = ({ isFocusMo
                     <h1 className="text-xl font-bold text-gray-800">Exámenes Prácticos</h1>
                     <div className="mt-2">
                         <div className="flex bg-gray-100 rounded-lg p-1">
-                            {(['t1', 't2', 'rec'] as ExamPeriod[]).map(period => (
+                            {(['t1', 't2', 't3', 'rec'] as ExamPeriod[]).map(period => (
                                 <button key={period} onClick={() => setActivePeriod(period)}
                                     className={`flex-1 px-2 py-1 text-sm font-semibold rounded-md transition ${activePeriod === period ? 'bg-white shadow text-blue-600' : 'text-gray-600'}`}
                                 >
-                                    {period === 't1' ? '1º Trimestre' : period === 't2' ? '2º Trimestre' : 'Recuperación'}
+                                    {period === 't1' ? '1º Trim' : period === 't2' ? '2º Trim' : period === 't3' ? '3º Trim' : 'Recup'}
                                 </button>
                             ))}
                         </div>

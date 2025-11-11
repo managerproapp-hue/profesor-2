@@ -32,9 +32,9 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 }
 
 const defaultTrimesterDates: TrimesterDates = {
-  t1: { start: '2024-09-01', end: '2024-12-22' },
-  t2: { start: '2025-01-08', end: '2025-04-11' },
-  t3: { start: '2025-04-22', end: '2025-06-24' },
+  t1: { start: '2025-09-01', end: '2025-12-22' },
+  t2: { start: '2026-01-08', end: '2026-04-11' },
+  t3: { start: '2026-04-22', end: '2026-06-24' },
 };
 
 
@@ -123,6 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         students.forEach(student => {
             const t1Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't1');
             const t2Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't2');
+            const t3Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't3');
             const recExam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 'rec');
 
             // Step 1: Collect all scores per trimester
@@ -192,6 +193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 practicalExams: {
                     t1: t1Exam?.finalScore ?? null,
                     t2: t2Exam?.finalScore ?? null,
+                    t3: t3Exam?.finalScore ?? null,
                     rec: recExam?.finalScore ?? null,
                 }
             };

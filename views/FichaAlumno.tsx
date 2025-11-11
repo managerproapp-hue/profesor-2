@@ -207,6 +207,7 @@ const FichaAlumno: React.FC<FichaAlumnoProps> = ({ student, onBack, entryExitRec
                         <InfoRow label="Media Servicios (T3)" value={renderGrade(calculatedGrades?.serviceAverages?.t3)} />
                         <InfoRow label="Media Ex. Práctico (T1)" value={renderGrade(calculatedGrades?.practicalExams.t1)} />
                         <InfoRow label="Media Ex. Práctico (T2)" value={renderGrade(calculatedGrades?.practicalExams.t2)} />
+                        <InfoRow label="Media Ex. Práctico (T3)" value={renderGrade(calculatedGrades?.practicalExams.t3)} />
                         <InfoRow label="Media Ex. Práctico (REC)" value={renderGrade(calculatedGrades?.practicalExams.rec)} />
                     </dl>
                 </div>
@@ -235,7 +236,7 @@ const FichaAlumno: React.FC<FichaAlumnoProps> = ({ student, onBack, entryExitRec
                                                         const periodKey = period.key as 't1' | 't2' | 't3';
                                                         grade = calculatedGrades?.serviceAverages?.[periodKey];
                                                     } else {
-                                                         const examKey = { 'exPracticoT1': 't1', 'exPracticoT2': 't2', 'exPracticoRec': 'rec' }[instrument.key] as 't1' | 't2' | 'rec';
+                                                         const examKey = { 'exPracticoT1': 't1', 'exPracticoT2': 't2', 'exPracticoT3': 't3', 'exPracticoRec': 'rec' }[instrument.key] as 't1' | 't2' | 't3' | 'rec';
                                                          if(examKey) grade = calculatedGrades?.practicalExams[examKey];
                                                     }
                                                 }
