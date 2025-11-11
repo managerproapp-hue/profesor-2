@@ -98,24 +98,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [trimesterDates, setTrimesterDates] = useLocalStorage<TrimesterDates>('trimester-dates', defaultTrimesterDates);
     const [toasts, setToasts] = useState<Toast[]>([]);
     
-    const getTrimester = (date: Date): 't1' | 't2' | 't3' | null => {
-        const checkDate = new Date(date);
-        checkDate.setHours(0,0,0,0);
+    const getTrimester = (dateStr: string): 't1' | 't2' | 't3' | null => {
+        const parseDate = (str: string) => {
+            if (!str || typeof str !== 'string') return null;
+            const parts = str.split('-').map(Number);
+            if (parts.length !== 3 || parts.some(isNaN)) return null;
+            const [year, month, day] = parts;
+            return new Date(year, month - 1, day, 12, 0, 0);
+        };
 
-        // Ensure dates from storage are parsed correctly
-        const t1Start = new Date(trimesterDates.t1.start);
-        const t1End = new Date(trimesterDates.t1.end);
-        const t2Start = new Date(trimesterDates.t2.start);
-        const t2End = new Date(trimesterDates.t2.end);
-        const t3Start = new Date(trimesterDates.t3.start);
-        const t3End = new Date(trimesterDates.t3.end);
+        const checkDate = parseDate(dateStr);
+        if (!checkDate) return null;
+
+        const t1Start = parseDate(trimesterDates.t1.start);
+        const t1End = parseDate(trimesterDates.t1.end);
+        const t2Start = parseDate(trimesterDates.t2.start);
+        const t2End = parseDate(trimesterDates.t2.end);
+        const t3Start = parseDate(trimesterDates.t3.start);
+        const t3End = parseDate(trimesterDates.t3.end);
+        
+        if (!t1Start || !t1End || !t2Start || !t2End || !t3Start || !t3End) return null;
 
         if (checkDate >= t1Start && checkDate <= t1End) return 't1';
         if (checkDate >= t2Start && checkDate <= t2End) return 't2';
         if (checkDate >= t3Start && checkDate <= t3End) return 't3';
         
         return null;
-    }
+    };
 
     const calculatedStudentGrades = useMemo((): Record<string, StudentCalculatedGrades> => {
         const studentGrades: Record<string, StudentCalculatedGrades> = {};
@@ -126,7 +135,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const t3Exam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 't3');
             const recExam = practicalExamEvaluations.find(e => e.studentId === student.id && e.examPeriod === 'rec');
 
-            // Step 1: Collect all scores per trimester
             const trimesterScores: {
                 t1: { individual: number[], group: number[] },
                 t2: { individual: number[], group: number[] },
@@ -141,8 +149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const service = services.find(s => s.id === evaluation.serviceId);
                 if (!service) return;
 
-                const serviceDate = new Date(service.date);
-                const trimester = getTrimester(serviceDate);
+                const trimester = getTrimester(service.date);
                 if (!trimester) return;
 
                 const individualEval = evaluation.serviceDay.individualScores[student.id];
@@ -165,7 +172,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 }
             });
             
-            // Step 2: Calculate averages and final weighted grade for each trimester
             const serviceAverages: { t1: number | null, t2: number | null, t3: number | null } = { t1: null, t2: null, t3: null };
 
             (['t1', 't2', 't3'] as const).forEach(trimester => {

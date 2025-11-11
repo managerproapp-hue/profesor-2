@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Student } from '../types';
 import { SERVICE_GRADE_WEIGHTS } from '../data/constants';
 import { ExportIcon } from '../components/icons';
@@ -14,27 +14,42 @@ interface NotasServicioViewProps {
 const NotasServicioView: React.FC<NotasServicioViewProps> = ({ onNavigateToService }) => {
     const { students, services, practiceGroups, serviceEvaluations, teacherData, instituteData, trimesterDates } = useAppContext();
     
-    const getTrimester = (date: Date): 't1' | 't2' | 't3' | null => {
-        const checkDate = new Date(date);
-        checkDate.setHours(0,0,0,0);
+    const getTrimester = useCallback((dateStr: string): 't1' | 't2' | 't3' | null => {
+        if (!dateStr || typeof dateStr !== 'string') return null;
 
-        const t1Start = new Date(trimesterDates.t1.start);
-        const t1End = new Date(trimesterDates.t1.end);
-        const t2Start = new Date(trimesterDates.t2.start);
-        const t2End = new Date(trimesterDates.t2.end);
-        const t3Start = new Date(trimesterDates.t3.start);
-        const t3End = new Date(trimesterDates.t3.end);
+        const parseDate = (str: string) => {
+            const [year, month, day] = str.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        };
 
-        if (checkDate >= t1Start && checkDate <= t1End) return 't1';
-        if (checkDate >= t2Start && checkDate <= t2End) return 't2';
-        if (checkDate >= t3Start && checkDate <= t3End) return 't3';
+        try {
+            const checkDate = parseDate(dateStr);
+        
+            const t1Start = parseDate(trimesterDates.t1.start);
+            const t1End = parseDate(trimesterDates.t1.end);
+            const t2Start = parseDate(trimesterDates.t2.start);
+            const t2End = parseDate(trimesterDates.t2.end);
+            const t3Start = parseDate(trimesterDates.t3.start);
+            const t3End = parseDate(trimesterDates.t3.end);
+
+            if (checkDate >= t1Start && checkDate <= t1End) return 't1';
+            if (checkDate >= t2Start && checkDate <= t2End) return 't2';
+            if (checkDate >= t3Start && checkDate <= t3End) return 't3';
+        } catch (e) {
+            console.error("Error parsing date in getTrimester:", dateStr, e);
+            return null;
+        }
         
         return null;
-    }
+    }, [trimesterDates]);
 
-    const sortedServices = useMemo(() => 
-        [...services].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-    [services]);
+    const sortedServices = useMemo(() => {
+        const parseDate = (str: string) => {
+            const [year, month, day] = str.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        };
+        return [...services].sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
+    }, [services]);
 
     const studentData = useMemo(() => {
         const studentGroups = students.reduce((acc, student) => {
@@ -79,7 +94,7 @@ const NotasServicioView: React.FC<NotasServicioViewProps> = ({ onNavigateToServi
                 
                 serviceScores[service.id] = { group: groupGrade, individual: individualGrade, absent: false };
                 
-                const trimester = getTrimester(new Date(service.date));
+                const trimester = getTrimester(service.date);
                 if (trimester) {
                     if (individualGrade !== null) {
                         gradesByTrimester[trimester].individual.push(individualGrade);
@@ -177,7 +192,7 @@ const NotasServicioView: React.FC<NotasServicioViewProps> = ({ onNavigateToServi
                                     <th key={service.id} rowSpan={2} className="p-2 border font-semibold text-gray-600 min-w-[120px]">
                                         <button onClick={() => onNavigateToService(service.id, 'evaluation')} className="hover:text-blue-600 w-full">
                                             <span className="font-bold">{service.name}</span><br />
-                                            <span className="font-normal text-gray-500">{new Date(service.date).toLocaleDateString('es-ES')}</span>
+                                            <span className="font-normal text-gray-500">{new Date(service.date.replace(/-/g, '/')).toLocaleDateString('es-ES')}</span>
                                         </button>
                                     </th>
                                 ))}
