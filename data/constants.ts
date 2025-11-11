@@ -96,7 +96,15 @@ export const PRACTICAL_EXAM_RUBRIC = [
 
 // --- New Constants for Academic Management ---
 
-export const COURSE_MODULES = ['FOL', 'Inglés Técnico', 'EIE'];
+export const COURSE_MODULES = [
+    'Ofertas gastronómicas',
+    'Productos culinarios',
+    'Postres en restauración',
+    'Itinerario personal para la Empleabilidad II',
+    'Proyecto Intermodular',
+    'Sostenibilidad aplicada al sistema productivo',
+    'Optativa'
+];
 
 export const ACADEMIC_EVALUATION_STRUCTURE = {
   periods: [
