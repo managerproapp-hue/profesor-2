@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Student, PracticeGroup, Service, ServiceEvaluation, ServiceRole, StudentRoleAssignment, Elaboration } from '../types';
 import { PlusIcon, TrashIcon, SettingsIcon, PencilIcon, SaveIcon, InfoIcon, CalendarDaysIcon, ChefHatIcon, XIcon } from '../components/icons';
@@ -64,6 +66,8 @@ const GestionPractica: React.FC<GestionPracticaProps> = ({
             id: newServiceId,
             name: `Nuevo Servicio ${new Date().toLocaleDateString('es-ES')}`,
             date: new Date().toISOString().split('T')[0],
+            // FIX: Add required 'trimester' property. Defaulting to 't1'.
+            trimester: 't1',
             isLocked: false,
             assignedGroups: { comedor: [], takeaway: [] },
             elaborations: { comedor: [], takeaway: [] },

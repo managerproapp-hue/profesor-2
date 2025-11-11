@@ -71,7 +71,7 @@ interface AppContextType {
     handleFileUpload: (file: File) => Promise<void>;
     handleUpdateStudent: (student: Student) => void;
 
-    handleCreateService: () => string;
+    handleCreateService: (trimester: 't1' | 't2' | 't3') => string;
     handleSaveServiceAndEvaluation: (service: Service, evaluation: ServiceEvaluation) => void;
     handleDeleteService: (serviceId: string) => void;
     onDeleteRole: (roleId: string) => void;
@@ -97,35 +97,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [instituteData, setInstituteData] = useLocalStorage<InstituteData>('institute-app-data', { name: '', address: '', cif: '', logo: null });
     const [trimesterDates, setTrimesterDates] = useLocalStorage<TrimesterDates>('trimester-dates', defaultTrimesterDates);
     const [toasts, setToasts] = useState<Toast[]>([]);
+
+    useEffect(() => {
+        // Migration: Ensure all services have a 'trimester' property for backward compatibility.
+        const needsMigration = services.some(s => !s.trimester);
+
+        if (needsMigration) {
+            console.log("Running migration for service trimesters...");
+            
+            const parseDateUTC = (dateStr: string) => {
+                const [year, month, day] = dateStr.split('-').map(Number);
+                return new Date(Date.UTC(year, month - 1, day));
+            }
+
+            const getTrimesterFromDate = (dateStr: string, dates: TrimesterDates): 't1' | 't2' | 't3' => {
+                const serviceDate = parseDateUTC(dateStr);
+                
+                const t1Start = parseDateUTC(dates.t1.start);
+                const t1End = parseDateUTC(dates.t1.end);
+                
+                const t2Start = parseDateUTC(dates.t2.start);
+                const t2End = parseDateUTC(dates.t2.end);
+                
+                const t3Start = parseDateUTC(dates.t3.start);
+                const t3End = parseDateUTC(dates.t3.end);
+
+                // Make end dates inclusive for the whole day
+                t1End.setUTCHours(23, 59, 59, 999);
+                t2End.setUTCHours(23, 59, 59, 999);
+                t3End.setUTCHours(23, 59, 59, 999);
+                
+                if (serviceDate >= t1Start && serviceDate <= t1End) return 't1';
+                if (serviceDate >= t2Start && serviceDate <= t2End) return 't2';
+                if (serviceDate >= t3Start && serviceDate <= t3End) return 't3';
+                
+                console.warn(`Service date ${dateStr} is outside all defined trimester ranges. Defaulting to t1 for migration.`);
+                return 't1'; 
+            };
+
+            const migratedServices = services.map(service => {
+                if (!service.trimester) {
+                    const trimester = getTrimesterFromDate(service.date, trimesterDates);
+                    return { ...service, trimester };
+                }
+                return service;
+            });
+            setServices(migratedServices);
+            addToast('Datos de servicios actualizados a la nueva versión.', 'info');
+        }
+        // This effect should only run once on mount to check for migration.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     
-    const getTrimester = (dateStr: string): 't1' | 't2' | 't3' | null => {
-        const parseDate = (str: string) => {
-            if (!str || typeof str !== 'string') return null;
-            const parts = str.split('-').map(Number);
-            if (parts.length !== 3 || parts.some(isNaN)) return null;
-            const [year, month, day] = parts;
-            return new Date(year, month - 1, day, 12, 0, 0);
-        };
-
-        const checkDate = parseDate(dateStr);
-        if (!checkDate) return null;
-
-        const t1Start = parseDate(trimesterDates.t1.start);
-        const t1End = parseDate(trimesterDates.t1.end);
-        const t2Start = parseDate(trimesterDates.t2.start);
-        const t2End = parseDate(trimesterDates.t2.end);
-        const t3Start = parseDate(trimesterDates.t3.start);
-        const t3End = parseDate(trimesterDates.t3.end);
-        
-        if (!t1Start || !t1End || !t2Start || !t2End || !t3Start || !t3End) return null;
-
-        if (checkDate >= t1Start && checkDate <= t1End) return 't1';
-        if (checkDate >= t2Start && checkDate <= t2End) return 't2';
-        if (checkDate >= t3Start && checkDate <= t3End) return 't3';
-        
-        return null;
-    };
-
     const calculatedStudentGrades = useMemo((): Record<string, StudentCalculatedGrades> => {
         const studentGrades: Record<string, StudentCalculatedGrades> = {};
 
@@ -149,7 +172,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const service = services.find(s => s.id === evaluation.serviceId);
                 if (!service) return;
 
-                const trimester = getTrimester(service.date);
+                const trimester = service.trimester;
                 if (!trimester) return;
 
                 const individualEval = evaluation.serviceDay.individualScores[student.id];
@@ -206,7 +229,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         return studentGrades;
-    }, [students, services, serviceEvaluations, practicalExamEvaluations, practiceGroups, trimesterDates]);
+    }, [students, services, serviceEvaluations, practicalExamEvaluations, practiceGroups]);
 
     const addToast = (message: string, type: ToastType = 'info') => {
         const id = new Date().getTime().toString();
@@ -231,12 +254,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addToast('Datos del alumno actualizados.', 'success');
     };
 
-    const handleCreateService = (): string => {
+    const handleCreateService = (trimester: 't1' | 't2' | 't3'): string => {
         const newServiceId = `service-${Date.now()}`;
         const newService: Service = {
             id: newServiceId,
             name: `Nuevo Servicio ${new Date().toLocaleDateString('es-ES')}`,
             date: new Date().toISOString().split('T')[0],
+            trimester: trimester,
             isLocked: false,
             assignedGroups: { comedor: [], takeaway: [] },
             elaborations: { comedor: [], takeaway: [] },

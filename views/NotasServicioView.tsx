@@ -12,43 +12,10 @@ interface NotasServicioViewProps {
 }
 
 const NotasServicioView: React.FC<NotasServicioViewProps> = ({ onNavigateToService }) => {
-    const { students, services, practiceGroups, serviceEvaluations, teacherData, instituteData, trimesterDates } = useAppContext();
+    const { students, services, practiceGroups, serviceEvaluations, teacherData, instituteData } = useAppContext();
     
-    const getTrimester = useCallback((dateStr: string): 't1' | 't2' | 't3' | null => {
-        if (!dateStr || typeof dateStr !== 'string') return null;
-
-        const parseDate = (str: string) => {
-            const [year, month, day] = str.split('-').map(Number);
-            return new Date(year, month - 1, day);
-        };
-
-        try {
-            const checkDate = parseDate(dateStr);
-        
-            const t1Start = parseDate(trimesterDates.t1.start);
-            const t1End = parseDate(trimesterDates.t1.end);
-            const t2Start = parseDate(trimesterDates.t2.start);
-            const t2End = parseDate(trimesterDates.t2.end);
-            const t3Start = parseDate(trimesterDates.t3.start);
-            const t3End = parseDate(trimesterDates.t3.end);
-
-            if (checkDate >= t1Start && checkDate <= t1End) return 't1';
-            if (checkDate >= t2Start && checkDate <= t2End) return 't2';
-            if (checkDate >= t3Start && checkDate <= t3End) return 't3';
-        } catch (e) {
-            console.error("Error parsing date in getTrimester:", dateStr, e);
-            return null;
-        }
-        
-        return null;
-    }, [trimesterDates]);
-
     const sortedServices = useMemo(() => {
-        const parseDate = (str: string) => {
-            const [year, month, day] = str.split('-').map(Number);
-            return new Date(year, month - 1, day);
-        };
-        return [...services].sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
+        return [...services].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [services]);
 
     const studentData = useMemo(() => {
@@ -94,7 +61,7 @@ const NotasServicioView: React.FC<NotasServicioViewProps> = ({ onNavigateToServi
                 
                 serviceScores[service.id] = { group: groupGrade, individual: individualGrade, absent: false };
                 
-                const trimester = getTrimester(service.date);
+                const trimester = service.trimester;
                 if (trimester) {
                     if (individualGrade !== null) {
                         gradesByTrimester[trimester].individual.push(individualGrade);
@@ -125,7 +92,7 @@ const NotasServicioView: React.FC<NotasServicioViewProps> = ({ onNavigateToServi
             return { serviceScores, averages };
         };
         return { studentGroups, getScores };
-    }, [students, sortedServices, practiceGroups, serviceEvaluations, getTrimester]);
+    }, [students, sortedServices, practiceGroups, serviceEvaluations]);
     
     const handleExport = (format: 'pdf' | 'xlsx') => {
         const title = "Resumen de Notas de Servicio";

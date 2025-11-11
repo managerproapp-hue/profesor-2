@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Service, ServiceEvaluation, Elaboration, Student, PracticeGroup, ServiceRole, TeacherData, InstituteData } from '../types';
-import { PlusIcon, TrashIcon, SaveIcon, ChefHatIcon, LockClosedIcon, LockOpenIcon, FileTextIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, SaveIcon, ChefHatIcon, LockClosedIcon, LockOpenIcon, FileTextIcon, ChevronDownIcon, ChevronRightIcon } from '../components/icons';
 import { useAppContext } from '../context/AppContext';
 
 const ServiceEvaluationView = lazy(() => import('./ServiceEvaluationView'));
@@ -33,6 +33,7 @@ const GestionPracticaView: React.FC<GestionPracticaViewProps> = ({
         takeaway: { name: '', responsibleGroupId: '' }
     });
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [collapsedTrimesters, setCollapsedTrimesters] = useState<Set<string>>(new Set());
 
 
     useEffect(() => {
@@ -57,8 +58,8 @@ const GestionPracticaView: React.FC<GestionPracticaViewProps> = ({
         }
     }, [selectedServiceId, services, serviceEvaluations, initialServiceId]);
     
-    const handleCreateService = () => {
-        const newServiceId = contextCreateService();
+    const handleCreateService = (trimester: 't1' | 't2' | 't3') => {
+        const newServiceId = contextCreateService(trimester);
         setSelectedServiceId(newServiceId);
         setMainTab('planning');
     };
@@ -158,10 +159,33 @@ const GestionPracticaView: React.FC<GestionPracticaViewProps> = ({
         handleServiceFieldChange('studentRoles', newStudentRoles);
     };
 
-    const sortedServices = useMemo(() =>
-        [...services].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-        [services]
-    );
+    const groupedServices = useMemo(() => {
+        const groups: { t1: Service[], t2: Service[], t3: Service[] } = { t1: [], t2: [], t3: [] };
+        services.forEach(s => {
+            if (s.trimester && groups[s.trimester]) {
+                groups[s.trimester].push(s);
+            }
+        });
+        // Sort services within each group by date, descending
+        const sortByDateDesc = (a: Service, b: Service) => new Date(b.date).getTime() - new Date(a.date).getTime();
+        groups.t1.sort(sortByDateDesc);
+        groups.t2.sort(sortByDateDesc);
+        groups.t3.sort(sortByDateDesc);
+        return groups;
+    }, [services]);
+
+    const toggleTrimesterCollapse = (trimester: string) => {
+        setCollapsedTrimesters(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(trimester)) {
+                newSet.delete(trimester);
+            } else {
+                newSet.add(trimester);
+            }
+            return newSet;
+        });
+    };
+
 
     if (practiceGroups.length === 0) {
         return (
@@ -288,16 +312,37 @@ const GestionPracticaView: React.FC<GestionPracticaViewProps> = ({
         );
     };
 
+    const TrimesterSection: React.FC<{ trimester: 't1' | 't2' | 't3', title: string }> = ({ trimester, title }) => {
+        const isCollapsed = collapsedTrimesters.has(trimester);
+        return (
+            <div>
+                <div className="flex justify-between items-center mb-2">
+                    <button onClick={() => toggleTrimesterCollapse(trimester)} className="flex items-center text-lg font-bold text-gray-800 w-full">
+                         {isCollapsed ? <ChevronRightIcon className="w-5 h-5 mr-1" /> : <ChevronDownIcon className="w-5 h-5 mr-1" />}
+                        {title}
+                    </button>
+                    <button onClick={() => handleCreateService(trimester)} className="p-1.5 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-transform transform hover:scale-110">
+                        <PlusIcon className="w-4 h-4" />
+                    </button>
+                </div>
+                {!isCollapsed && (
+                    <ul className="space-y-2 pl-2">
+                        {groupedServices[trimester].map(service => (<li key={service.id}><a href="#" onClick={(e) => { e.preventDefault(); setSelectedServiceId(service.id); setMainTab('planning'); }} className={`block p-3 rounded-lg transition-colors ${selectedServiceId === service.id ? 'bg-blue-100' : 'hover:bg-gray-100'}`}><div className="flex justify-between items-center"><p className={`font-semibold ${selectedServiceId === service.id ? 'text-blue-800' : 'text-gray-800'}`}>{service.name}</p> {service.isLocked && <LockClosedIcon className="w-4 h-4 text-gray-500" />}</div><p className="text-sm text-gray-500">{new Date(service.date).toLocaleDateString('es-ES')}</p></a></li>))}
+                    </ul>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="flex h-[calc(100vh-64px)]">
             <aside className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0 bg-white p-4 border-r overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-gray-800">Servicios</h2>
-                    <button onClick={handleCreateService} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-transform transform hover:scale-110"><PlusIcon className="w-5 h-5" /></button>
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Servicios</h2>
+                <div className="space-y-4">
+                    <TrimesterSection trimester="t1" title="1º Trimestre" />
+                    <TrimesterSection trimester="t2" title="2º Trimestre" />
+                    <TrimesterSection trimester="t3" title="3º Trimestre" />
                 </div>
-                <ul className="space-y-2">
-                    {sortedServices.map(service => (<li key={service.id}><a href="#" onClick={(e) => { e.preventDefault(); setSelectedServiceId(service.id); setMainTab('planning'); }} className={`block p-3 rounded-lg transition-colors ${selectedServiceId === service.id ? 'bg-blue-100' : 'hover:bg-gray-100'}`}><div className="flex justify-between items-center"><p className={`font-semibold ${selectedServiceId === service.id ? 'text-blue-800' : 'text-gray-800'}`}>{service.name}</p> {service.isLocked && <LockClosedIcon className="w-4 h-4 text-gray-500" />}</div><p className="text-sm text-gray-500">{new Date(service.date).toLocaleDateString('es-ES')}</p></a></li>))}
-                </ul>
             </aside>
             <main className="flex-1 p-4 sm:p-6 bg-gray-50 overflow-y-auto">
                 {renderWorkspace()}

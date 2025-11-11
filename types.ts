@@ -45,6 +45,7 @@ export interface Service {
     id: string;
     name: string;
     date: string;
+    trimester: 't1' | 't2' | 't3';
     isLocked: boolean;
     assignedGroups: {
         comedor: string[];
