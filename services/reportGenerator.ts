@@ -246,6 +246,151 @@ export const generateTrackingSheetPDF = (viewModel: ReportViewModel) => {
     doc.save(`Ficha_Seguimiento_${service.name.replace(/ /g, '_')}.pdf`);
 };
 
+// --- Full Evaluation Report PDF ---
+export const generateFullEvaluationReportPDF = (viewModel: ReportViewModel) => {
+    const { service, evaluation, groupedStudentsInService, teacherData, instituteData } = viewModel;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    const didDrawPage = (data: any) => {
+        const doc = data.doc;
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        addImageToPdf(doc, instituteData.logo, PAGE_MARGIN, 10, 15, 15);
+        addImageToPdf(doc, teacherData.logo, pageWidth - PAGE_MARGIN - 15, 10, 15, 15);
+        
+        doc.setFontSize(14).setFont('helvetica', 'bold').setTextColor(40);
+        doc.text(`Ficha de Evaluación: ${service.name}`, pageWidth / 2, 18, { align: 'center' });
+        doc.setFontSize(10).setFont('helvetica', 'normal').setTextColor(100);
+        doc.text(`Fecha del servicio: ${new Date(service.date).toLocaleDateString('es-ES')}`, pageWidth / 2, 24, { align: 'center' });
+        
+        doc.setFontSize(8).setTextColor(120);
+        doc.text(`${instituteData.name} - ${teacherData.name}`, PAGE_MARGIN, pageHeight - 10);
+        doc.text(`Página ${data.pageNumber}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+        doc.text(new Date().toLocaleDateString('es-ES'), pageWidth - PAGE_MARGIN, pageHeight - 10, { align: 'right' });
+    };
+
+    // Part 1: Group Evaluation Table
+    const participatingGroups = groupedStudentsInService.map(g => g.group);
+    const groupEvalHead = [['Criterio de Evaluación Grupal', ...participatingGroups.map(g => g.name)]];
+    const groupEvalBody = [];
+    
+    GROUP_EVALUATION_ITEMS.forEach((item, index) => {
+        const row = [item.label];
+        participatingGroups.forEach(group => {
+            const score = evaluation.serviceDay.groupScores[group.id]?.scores[index];
+            row.push(score !== null && score !== undefined ? `${score.toFixed(2)} / ${item.maxScore.toFixed(2)}` : '-');
+        });
+        groupEvalBody.push(row);
+    });
+
+    const groupTotals = participatingGroups.map(group => {
+        const scores = evaluation.serviceDay.groupScores[group.id]?.scores;
+        return scores ? scores.reduce((sum, s) => sum + (s || 0), 0) : 0;
+    });
+
+    groupEvalBody.push([
+        { content: 'TOTAL', styles: { fontStyle: 'bold' } },
+        ...groupTotals.map(total => ({ content: `${total.toFixed(2)} / 10.00`, styles: { fontStyle: 'bold' } }))
+    ]);
+    
+    groupEvalBody.push([
+        { content: 'Observaciones', styles: { fontStyle: 'bold' } },
+        ...participatingGroups.map(group => evaluation.serviceDay.groupScores[group.id]?.observations || '')
+    ]);
+
+    autoTable(doc, {
+        head: groupEvalHead,
+        body: groupEvalBody,
+        startY: 32,
+        margin: { top: 30, left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: 20 },
+        headStyles: { fillColor: [56, 161, 105] },
+        didDrawPage,
+    });
+
+    // Part 2: Individual Evaluation Tables (one per group, on new pages)
+    const preServiceDate = Object.keys(evaluation.preService)[0] || null;
+
+    groupedStudentsInService.forEach(groupData => {
+        doc.addPage();
+        const studentsInGroup = groupData.students;
+        const studentHeaders = studentsInGroup.map(s => `${s.apellido1} ${s.nombre.charAt(0)}.`);
+        const individualEvalHead = [['Criterio de Evaluación Individual', ...studentHeaders]];
+        const individualEvalBody = [];
+
+        // Pre-Service Section
+        individualEvalBody.push([{ content: `DÍA PREVIO (${preServiceDate ? new Date(preServiceDate).toLocaleDateString('es-ES') : 'N/A'})`, colSpan: studentsInGroup.length + 1, styles: { fillColor: [220, 220, 220], fontStyle: 'bold', textColor: 40 } }]);
+        const preServiceChecks = ['attendance', 'hasFichas', 'hasUniforme', 'hasMaterial'];
+        const preServiceLabels: Record<string, string> = { attendance: 'Asistencia', hasFichas: 'Fichas', hasUniforme: 'Uniforme', hasMaterial: 'Material' };
+
+        preServiceChecks.forEach(check => {
+            const row = [preServiceLabels[check]];
+            studentsInGroup.forEach(s => {
+                const isChecked = preServiceDate ? (evaluation.preService[preServiceDate]?.individualEvaluations[s.id]?.[check as keyof typeof evaluation.preService[string]['individualEvaluations'][string]] ?? (check === 'attendance')) : false;
+                row.push(isChecked ? '✔' : '✘');
+            });
+            individualEvalBody.push(row);
+        });
+
+        PRE_SERVICE_BEHAVIOR_ITEMS.forEach(item => {
+            const row = [item.label];
+            studentsInGroup.forEach(s => {
+                const score = preServiceDate ? evaluation.preService[preServiceDate]?.individualEvaluations[s.id]?.behaviorScores[item.id] : null;
+                const rating = BEHAVIOR_RATING_MAP.find(r => r.value === score);
+                row.push(rating ? rating.symbol : '-');
+            });
+            individualEvalBody.push(row);
+        });
+
+        // Service-Day Section
+        individualEvalBody.push([{ content: 'DÍA DE SERVICIO', colSpan: studentsInGroup.length + 1, styles: { fillColor: [220, 220, 220], fontStyle: 'bold', textColor: 40 } }]);
+        INDIVIDUAL_EVALUATION_ITEMS.forEach((item, index) => {
+            const row = [item.label];
+            studentsInGroup.forEach(s => {
+                const score = evaluation.serviceDay.individualScores[s.id]?.scores[index];
+                row.push(score !== null && score !== undefined ? `${score.toFixed(2)} / ${item.maxScore.toFixed(2)}` : '-');
+            });
+            individualEvalBody.push(row);
+        });
+
+        const individualTotals = studentsInGroup.map(s => {
+            const scores = evaluation.serviceDay.individualScores[s.id]?.scores;
+            return scores ? scores.reduce((sum, score) => sum + (score || 0), 0) : 0;
+        });
+
+        individualEvalBody.push([
+            { content: 'TOTAL DÍA SERVICIO', styles: { fontStyle: 'bold' } },
+            ...individualTotals.map(total => ({ content: `${total.toFixed(2)} / 10.00`, styles: { fontStyle: 'bold' } }))
+        ]);
+
+        individualEvalBody.push([
+            { content: 'Observaciones', styles: { fontStyle: 'bold' } },
+            ...studentsInGroup.map(s => evaluation.serviceDay.individualScores[s.id]?.observations || '')
+        ]);
+        
+        autoTable(doc, {
+            head: [[{ content: `Grupo ${groupData.group.name}`, colSpan: studentsInGroup.length + 1, styles: { halign: 'center', fillColor: [49, 130, 206], fontStyle: 'bold' } }]],
+            body: [],
+            startY: 32,
+            margin: { top: 30, left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: 20 },
+            didDrawPage,
+        });
+
+        autoTable(doc, {
+            head: individualEvalHead,
+            body: individualEvalBody,
+            startY: (doc as any).lastAutoTable.finalY,
+            margin: { top: 30, left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: 20 },
+            headStyles: { fillColor: [74, 85, 104] },
+            didDrawPage,
+        });
+    });
+
+
+    doc.save(`Evaluacion_${service.name.replace(/ /g, '_')}.pdf`);
+};
+
+
 // --- Detailed Student Service Report PDF (Internal Helper) ---
 const _drawDetailedStudentReportPage = (doc: jsPDF, viewModel: ReportViewModel, studentId: string) => {
     const { service, evaluation, students, practiceGroups, serviceRoles, teacherData, instituteData, entryExitRecords } = viewModel;
