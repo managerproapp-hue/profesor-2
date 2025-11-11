@@ -559,9 +559,18 @@ const ServiceEvaluationView: React.FC<ServiceEvaluationViewProps> = ({ service, 
 
                     {participatingGroups.map(group => {
                          const groupStudents = students.filter(s => group.studentIds.includes(s.id)).sort((a, b) => a.apellido1.localeCompare(b.apellido1));
+                         const assignedElaborations = [...service.elaborations.comedor, ...service.elaborations.takeaway].filter(e => e.responsibleGroupId === group.id);
                          return (
                             <div key={group.id} className="bg-white p-4 rounded-lg shadow-sm">
                                 <h3 className="text-xl font-bold mb-3 text-gray-700">Evaluación Individual - {group.name}</h3>
+                                {assignedElaborations.length > 0 && (
+                                    <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                                        <h4 className="text-sm font-semibold text-gray-600 mb-1">Elaboraciones Asignadas:</h4>
+                                        <ul className="list-disc list-inside text-sm text-gray-800">
+                                            {assignedElaborations.map(e => <li key={e.id}>{e.name}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
                                 <ServiceDayIndividualEvaluationTable
                                     studentsInGroup={groupStudents}
                                     evaluationData={evaluation.serviceDay.individualScores}

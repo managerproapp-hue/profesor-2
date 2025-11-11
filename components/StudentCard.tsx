@@ -15,17 +15,17 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onViewStudent }) => 
       className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 ease-in-out cursor-pointer"
       onClick={() => onViewStudent(student)}
     >
-      <img className="w-full h-48 object-cover object-center" src={student.fotoUrl} alt={`Photo of ${fullName}`} />
-      <div className="p-4">
-        <h3 className="text-xl font-bold text-gray-800 dark:text-white truncate" title={fullName}>{fullName}</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{`Grupo: ${student.grupo} - ${student.subgrupo}`}</p>
+      <img className="w-full h-32 object-cover object-center" src={student.fotoUrl} alt={`Photo of ${fullName}`} />
+      <div className="p-2">
+        <h3 className="text-base font-bold text-gray-800 dark:text-white truncate" title={fullName}>{fullName}</h3>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{`Grupo: ${student.grupo} - ${student.subgrupo}`}</p>
         
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-2">
+        <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
                  <EmailIcon />
                 <span className="truncate" title={student.emailOficial}>{student.emailOficial}</span>
             </div>
-             <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+             <div className="flex items-center text-xs text-gray-600 dark:text-gray-400">
                 <PhoneIcon />
                 <span className="truncate">{student.telefono}</span>
             </div>

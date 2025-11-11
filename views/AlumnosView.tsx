@@ -11,7 +11,7 @@ import { useAppContext } from '../context/AppContext';
 const AlumnosView: React.FC = () => {
   const { students, setStudents, entryExitRecords, calculatedStudentGrades, academicGrades, courseGrades, handleFileUpload: contextHandleFileUpload, addToast, handleUpdateStudent } = useAppContext();
   
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(false);
