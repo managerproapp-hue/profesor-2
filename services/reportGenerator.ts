@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ReportViewModel, Student, ServiceRole } from '../types';
+import { ReportViewModel, Student, ServiceRole, TeacherData, InstituteData } from '../types';
 import { PRE_SERVICE_BEHAVIOR_ITEMS, BEHAVIOR_RATING_MAP, INDIVIDUAL_EVALUATION_ITEMS, GROUP_EVALUATION_ITEMS } from '../data/constants';
 
 // --- Reusable PDF Generation Helpers ---
@@ -511,4 +511,64 @@ export const generateAllDetailedStudentReportsPDF = (viewModel: ReportViewModel)
         _drawDetailedStudentReportPage(doc, viewModel, student.id);
     });
     doc.save(`Informes_Alumnos_${viewModel.service.name.replace(/ /g, '_')}.pdf`);
+};
+
+export const generateEntryExitSheetPDF = (
+    students: Student[],
+    teacherData: TeacherData,
+    instituteData: InstituteData
+) => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    const didDrawPage = (data: any) => {
+        addImageToPdf(doc, instituteData.logo, PAGE_MARGIN, 10, 15, 15);
+        addImageToPdf(doc, teacherData.logo, pageWidth - PAGE_MARGIN - 15, 10, 15, 15);
+        
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40);
+        doc.text('Hoja de Registro de Entradas y Salidas', pageWidth / 2, 18, { align: 'center' });
+        
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(`${instituteData.name} - ${teacherData.name}`, PAGE_MARGIN, pageHeight - 10);
+        doc.text(`Página ${data.pageNumber}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+        const date = new Date().toLocaleDateString('es-ES');
+        doc.text(date, pageWidth - PAGE_MARGIN, pageHeight - 10, { align: 'right' });
+    };
+
+    const head = [['#', 'Alumno', 'Fecha', 'Tipo (E/S)', 'Motivo / Observaciones']];
+    const sortedStudents = [...students].sort((a, b) => a.apellido1.localeCompare(b.apellido1));
+
+    const body = sortedStudents.map((student, index) => [
+        index + 1,
+        `${student.apellido1} ${student.apellido2}, ${student.nombre}`,
+        '',
+        '',
+        '',
+    ]);
+
+    autoTable(doc, {
+        head: head,
+        body: body,
+        startY: 32,
+        margin: { top: 35, bottom: 20 },
+        headStyles: { fillColor: [74, 85, 104], textColor: 255, fontStyle: 'bold' },
+        didDrawPage,
+        styles: {
+            cellPadding: 3,
+            minCellHeight: 12
+        },
+        columnStyles: {
+            0: { cellWidth: 10 },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: 20 },
+            4: { cellWidth: 'auto' },
+        }
+    });
+
+    doc.save(`Hoja_Registro_Entradas_Salidas.pdf`);
 };

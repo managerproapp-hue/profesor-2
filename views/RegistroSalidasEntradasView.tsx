@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeftOnRectangleIcon, ArrowRightOnRectangleIcon, SearchIcon, SaveIcon } from '../components/icons';
+import { ArrowLeftOnRectangleIcon, ArrowRightOnRectangleIcon, SearchIcon, SaveIcon, PrinterIcon } from '../components/icons';
 import { useAppContext } from '../context/AppContext';
+import { generateEntryExitSheetPDF } from '../services/reportGenerator';
 
 const RegistroSalidasEntradasView: React.FC = () => {
-  const { students, handleSaveEntryExitRecord } = useAppContext();
+  const { students, handleSaveEntryExitRecord, teacherData, instituteData } = useAppContext();
   
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,13 +51,25 @@ const RegistroSalidasEntradasView: React.FC = () => {
     setReason('');
   };
 
+  const handlePrintSheet = () => {
+    generateEntryExitSheetPDF(students, teacherData, instituteData);
+  };
+
   return (
     <div>
-      <header className="mb-8">
-        <div className="flex items-center space-x-3">
+      <header className="flex flex-wrap justify-between items-center gap-4 mb-8">
+        <div>
           <h1 className="text-3xl font-bold text-gray-800">Registro de Salidas y Entradas</h1>
+          <p className="text-gray-500 mt-1">Registra las salidas anticipadas o llegadas tarde de los alumnos.</p>
         </div>
-        <p className="text-gray-500 mt-1">Registra las salidas anticipadas o llegadas tarde de los alumnos.</p>
+        <button 
+          onClick={handlePrintSheet} 
+          className="flex items-center bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700 transition text-sm"
+          title="Imprimir hoja de registro en papel"
+        >
+          <PrinterIcon className="w-5 h-5 mr-2" />
+          Imprimir Hoja de Registro
+        </button>
       </header>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
